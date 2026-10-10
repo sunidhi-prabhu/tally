@@ -1,8 +1,10 @@
 # yaml-language-server: $schema=./node_modules/envio/evm.schema.json
 #
-# Monad testnet (chain 10143). No TallyLedger has been deployed yet: the address and start block
-# MUST come from your own deployment via environment variables (see .env.example). Data comes
-# from Envio HyperSync, which requires ENVIO_API_TOKEN.
+# Monad testnet (chain 10143). Defaults are the verified deployment recorded in
+# packages/contracts/deployments/monad-testnet.json (tx 0x8caf5d1b…23f4, block 69887060);
+# ENVIO_TALLY_LEDGER_ADDRESS / ENVIO_TALLY_LEDGER_START_BLOCK override them. Envio Cloud uses the
+# defaults, so no dashboard variables are needed. Locally, data comes from HyperSync, which
+# requires ENVIO_API_TOKEN.
 #
 #   ENVIO_CONFIG=config.monad-testnet.yaml pnpm envio dev
 name: tally-indexer
@@ -26,7 +28,7 @@ contracts:
       - event: TokenSettled
 chains:
   - id: 10143
-    start_block: ${ENVIO_TALLY_LEDGER_START_BLOCK}
+    start_block: ${ENVIO_TALLY_LEDGER_START_BLOCK:-69887060}
     contracts:
       - name: TallyLedger
-        address: "${ENVIO_TALLY_LEDGER_ADDRESS}"
+        address: "${ENVIO_TALLY_LEDGER_ADDRESS:-0x07d6ec522de5119eea1bdb6aba5de879cfec6bb5}"
