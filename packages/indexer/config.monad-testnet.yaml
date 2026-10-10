@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+#
+# Monad testnet (chain 10143). No TallyLedger has been deployed yet: the address and start block
+# MUST come from your own deployment via environment variables (see .env.example). Data comes
+# from Envio HyperSync, which requires ENVIO_API_TOKEN.
+#
+#   ENVIO_CONFIG=config.monad-testnet.yaml pnpm envio dev
+name: tally-indexer
+description: Tally ledger indexer (Monad testnet)
+address_format: lowercase
+disable_default_cross_chain: true
+rollback_on_reorg: true
+# Every handler records the transaction hash.
+field_selection:
+  transaction_fields:
+    - hash
+contracts:
+  - name: TallyLedger
+    abi_file_path: ./abis/TallyLedger.json
+    events:
+      - event: GroupCreated
+      - event: MemberAdded
+      - event: MemberRemoved
+      - event: ExpenseRecorded
+      - event: SettlementRecorded
+      - event: TokenSettled
+chains:
+  - id: 10143
+    start_block: ${ENVIO_TALLY_LEDGER_START_BLOCK}
+    contracts:
+      - name: TallyLedger
+        address: "${ENVIO_TALLY_LEDGER_ADDRESS}"

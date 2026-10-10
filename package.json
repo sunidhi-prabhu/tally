@@ -1,0 +1,21 @@
+{
+  "name": "tally",
+  "private": true,
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @tally/web dev",
+    "build": "pnpm --filter @tally/contracts run build && pnpm -r --filter '!@tally/contracts' --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "format": "prettier --write . && pnpm -r --if-present run format",
+    "format:check": "prettier --check . && pnpm -r --if-present run format:check",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9"
+  }
+}

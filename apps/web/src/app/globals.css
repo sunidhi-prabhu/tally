@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7f5;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --surface: #ffffff;
+  --border: #e4e4e7;
+  --accent: #6d4aff;
+  --accent-contrast: #ffffff;
+  --positive: #0f7b4f;
+  --negative: #b42318;
+  --warning: #9a6700;
+  --positive-bg: #e7f6ee;
+  --negative-bg: #fdecea;
+  --warning-bg: #fff4d6;
+  --accent-bg: #efeaff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f0f10;
+    --foreground: #f4f4f5;
+    --muted: #a1a1aa;
+    --surface: #18181b;
+    --border: #27272a;
+    --accent: #9b85ff;
+    --accent-contrast: #0f0f10;
+    --positive: #4ade80;
+    --negative: #f87171;
+    --warning: #facc15;
+    --positive-bg: #12291c;
+    --negative-bg: #2d1414;
+    --warning-bg: #2b2410;
+    --accent-bg: #221d3a;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-bg: var(--accent-bg);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-positive-bg: var(--positive-bg);
+  --color-negative-bg: var(--negative-bg);
+  --color-warning-bg: var(--warning-bg);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

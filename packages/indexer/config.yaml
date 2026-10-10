@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+#
+# LOCAL ANVIL ONLY (chain 31337). Indexes the TallyLedger that
+# packages/contracts/script/LocalDemo.s.sol deploys on a fresh anvil node. The address is the
+# deterministic CREATE address of the deployer's second transaction (nonce 1); it does not exist
+# on any public network. For Monad testnet use config.monad-testnet.yaml.
+name: tally-indexer
+description: Tally ledger indexer (local anvil deployment)
+# Lowercase addresses everywhere: packages/core compares member IDs exactly.
+address_format: lowercase
+disable_default_cross_chain: true
+rollback_on_reorg: true
+# Every handler records the transaction hash.
+field_selection:
+  transaction_fields:
+    - hash
+contracts:
+  - name: TallyLedger
+    abi_file_path: ./abis/TallyLedger.json
+    events:
+      - event: GroupCreated
+      - event: MemberAdded
+      - event: MemberRemoved
+      - event: ExpenseRecorded
+      - event: SettlementRecorded
+      - event: TokenSettled
+chains:
+  - id: 31337
+    start_block: 0
+    rpc:
+      - url: http://127.0.0.1:8545
+        for: sync
+    contracts:
+      - name: TallyLedger
+        address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"

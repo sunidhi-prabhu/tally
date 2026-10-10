@@ -1,0 +1,5 @@
+# Envio codegen output and local state
+.envio/
+envio-env.d.ts
+generated/
+logs/

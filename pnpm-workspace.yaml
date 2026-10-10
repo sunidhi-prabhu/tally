@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Do not resolve package versions published less than 24 hours ago.
+minimumReleaseAge: 1440
+
+# Dependency install scripts are blocked unless listed here. Both ship prebuilt binaries.
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+  # Used by envio's tsx runtime; its postinstall only verifies the platform binary, which pnpm
+  # already installs as an optional dependency.
+  esbuild: false

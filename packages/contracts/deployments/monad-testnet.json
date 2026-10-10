@@ -1,0 +1,29 @@
+{
+  "network": "monad-testnet",
+  "chainId": 10143,
+  "status": "not-deployed",
+  "contract": "TallyLedger",
+  "address": null,
+  "deployer": null,
+  "settlementToken": {
+    "address": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC",
+    "symbol": "AUSD",
+    "decimals": 6
+  },
+  "constructorArgs": ["0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC"],
+  "deploymentTxHash": null,
+  "deploymentBlock": null,
+  "gasUsed": null,
+  "compiler": {
+    "version": "0.8.37",
+    "evmVersion": "osaka",
+    "optimizer": false,
+    "viaIR": false,
+    "network": "monad",
+    "hardfork": "monad:MonadNine"
+  },
+  "runtimeBytecodeMatchesBuild": null,
+  "explorer": null,
+  "recordedAt": null,
+  "note": "Template. Only `node scripts/deploy-testnet.mjs record` fills this in, from a verified receipt and on-chain bytecode."
+}

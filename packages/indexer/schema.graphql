@@ -1,0 +1,125 @@
+# Read model for TallyLedger. Every record is derived from contract events; the contract stays
+# the source of truth. Amounts are AUSD base units (6 decimals). Addresses are lowercase.
+# IDs reuse contract identifiers: Group = groupId, Expense/Settlement = "<groupId>-<bytes32 id>".
+
+enum SplitType {
+  EQUAL
+  CUSTOM
+}
+
+# Mirrors TallyLedger.SettlementKind. Only TOKEN_TRANSFER means tokens moved on-chain.
+enum SettlementKind {
+  ACKNOWLEDGED
+  TOKEN_TRANSFER
+}
+
+enum ActivityType {
+  GROUP_CREATED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  EXPENSE_RECORDED
+  SETTLEMENT_ACKNOWLEDGED
+  SETTLEMENT_TOKEN_TRANSFER
+}
+
+type Account {
+  id: ID! # address
+  memberships: [Membership!]! @derivedFrom(field: "account")
+}
+
+type Group {
+  id: ID! # groupId
+  groupId: BigInt!
+  name: String!
+  admin: String! @index
+  memberCount: Int!
+  expenseCount: Int!
+  settlementCount: Int!
+  activityCount: Int!
+  totalExpenseAmount: BigInt!
+  totalTokenSettled: BigInt!
+  totalAcknowledged: BigInt!
+  createdAtBlock: Int!
+  createdAtTimestamp: Int!
+  createdTxHash: String!
+  members: [Membership!]! @derivedFrom(field: "group")
+  expenses: [Expense!]! @derivedFrom(field: "group")
+  settlements: [Settlement!]! @derivedFrom(field: "group")
+  activity: [GroupActivity!]! @derivedFrom(field: "group")
+}
+
+# One row per (group, address). Kept after removal with active = false; netBalance is the
+# member's current net position (positive: owed money, negative: owes money).
+type Membership {
+  id: ID! # "<groupId>-<address>"
+  group: Group!
+  account: Account!
+  address: String! @index
+  active: Boolean! @index
+  netBalance: BigInt!
+  totalPaid: BigInt!
+  totalOwedShares: BigInt!
+  addedBy: String!
+  joinedAtBlock: Int!
+  leftAtBlock: Int
+}
+
+type Expense {
+  id: ID! # "<groupId>-<expenseId>"
+  group: Group!
+  expenseId: String! @index
+  payer: String! @index
+  amount: BigInt!
+  splitType: SplitType!
+  description: String!
+  participantCount: Int!
+  shares: [ExpenseShare!]! @derivedFrom(field: "expense")
+  blockNumber: Int!
+  blockTimestamp: Int!
+  txHash: String!
+  logIndex: Int!
+}
+
+type ExpenseShare {
+  id: ID! # "<expense id>-<address>"
+  expense: Expense!
+  group: Group!
+  member: String! @index
+  amount: BigInt!
+  position: Int!
+}
+
+type Settlement {
+  id: ID! # "<groupId>-<settlementId>"
+  group: Group!
+  settlementId: String! @index
+  debtor: String! @index
+  creditor: String! @index
+  amount: BigInt!
+  kind: SettlementKind!
+  # TOKEN_TRANSFER only: set when the matching TokenSettled event is indexed.
+  token: String
+  tokenTransferConfirmed: Boolean!
+  blockNumber: Int!
+  blockTimestamp: Int!
+  txHash: String!
+  logIndex: Int!
+}
+
+# Ordered history per group. `sequence` increases by one per activity; (blockNumber, logIndex)
+# is the on-chain order.
+type GroupActivity {
+  id: ID! # "<blockNumber>-<logIndex>"
+  group: Group!
+  sequence: Int! @index
+  activityType: ActivityType!
+  actor: String!
+  member: String
+  expense: Expense
+  settlement: Settlement
+  amount: BigInt
+  blockNumber: Int!
+  blockTimestamp: Int!
+  txHash: String!
+  logIndex: Int!
+}

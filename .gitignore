@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+apps/web/out/
+apps/web/build/
+next-env.d.ts
+.vercel
+
+# TypeScript / tests
+*.tsbuildinfo
+coverage/
+
+# Environment files: never commit real values. Only the examples are tracked.
+.env
+.env.*
+!.env.example
+
+# Keys and certificates
+*.pem
+*.key
+
+# Logs and OS files
+*.log
+.DS_Store
+
+# Foundry artifacts are ignored in packages/contracts/.gitignore
