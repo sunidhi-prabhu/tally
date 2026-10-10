@@ -64,6 +64,15 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "Content-Security-Policy", value: csp },
           { key: "X-Content-Type-Options", value: "nosniff" },
+          // Older browsers ignore CSP frame-ancestors; this blocks clickjacking there too.
+          { key: "X-Frame-Options", value: "DENY" },
+          // Isolates the window from cross-origin popups/openers (no window.opener access).
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+          // HTTPS only. Vercel adds this on *.vercel.app; set it here for custom domains too.
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains",
+          },
           { key: "Referrer-Policy", value: "no-referrer" },
           {
             key: "Permissions-Policy",
