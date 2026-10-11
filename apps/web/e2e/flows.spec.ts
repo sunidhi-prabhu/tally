@@ -24,6 +24,40 @@ test("add an equal-split expense", async ({ page }) => {
   await expect(page.getByText("Balances are updated.")).toBeVisible();
 });
 
+test("add a second expense after going back to the group", async ({ page }) => {
+  await page.goto("/");
+  await actAs(page, 0);
+  await page.goto("/groups/1/expenses/new");
+
+  for (const [description, amount] of [
+    ["E2E first", "3"],
+    ["E2E second", "4"],
+  ]) {
+    // A fresh, editable form every time, even though Next.js keeps visited pages alive.
+    await expect(page.getByLabel("Description")).toHaveValue("");
+    await expect(page.getByLabel("Description")).toBeEnabled();
+    await page.getByLabel("Description").fill(description!);
+    await page.getByLabel("Amount", { exact: true }).fill(amount!);
+    await page.getByRole("button", { name: "Review expense" }).click();
+    await page
+      .getByRole("dialog", { name: "Add this expense?" })
+      .getByRole("button", { name: "Add expense" })
+      .click();
+    await expect(page.getByText("Balances are updated.")).toBeVisible();
+
+    // Client-side navigation, like a user: back to the group, then "Add expense" again.
+    await page
+      .getByRole("link", { name: "Back to group", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/groups\/1$/);
+    await page.getByRole("link", { name: "Add expense", exact: true }).click();
+    await expect(page).toHaveURL(/\/groups\/1\/expenses\/new$/);
+  }
+  await expect(
+    page.getByRole("button", { name: "Review expense" }),
+  ).toBeEnabled();
+});
+
 test("custom split must add up before review", async ({ page }) => {
   await page.goto("/");
   await actAs(page, 0);

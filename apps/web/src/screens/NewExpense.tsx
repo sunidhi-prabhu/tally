@@ -6,6 +6,7 @@ import { getAddress, type Address, type Hex } from "viem";
 import { useAccount, useApp } from "@/providers/AppProviders";
 import { useLiveQuery } from "@/hooks/useLiveQuery";
 import { useTransaction } from "@/hooks/useTransaction";
+import { useFreshOnReturn } from "@/hooks/useFreshOnReturn";
 import { useWaitForIndexed } from "@/hooks/useWaitForIndexed";
 import { GROUP_DETAIL, parseGroupDetail } from "@/lib/indexer/queries";
 import {
@@ -33,6 +34,7 @@ import {
 
 export function NewExpense({ groupId }: { groupId: string }) {
   const group = useLiveQuery(GROUP_DETAIL, { id: groupId }, parseGroupDetail);
+  const visit = useFreshOnReturn();
   return (
     <>
       <Link href={`/groups/${groupId}`} className="text-sm text-accent">
@@ -43,6 +45,7 @@ export function NewExpense({ groupId }: { groupId: string }) {
         {(g) =>
           g ? (
             <ExpenseForm
+              key={visit}
               groupId={groupId}
               members={g.members.filter((m) => m.active).map((m) => m.address)}
             />

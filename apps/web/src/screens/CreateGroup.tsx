@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { decodeEventLog, getAddress, isAddress } from "viem";
 import { useAccount, useApp } from "@/providers/AppProviders";
 import { useTransaction } from "@/hooks/useTransaction";
+import { useFreshOnReturn } from "@/hooks/useFreshOnReturn";
 import { useWaitForIndexed } from "@/hooks/useWaitForIndexed";
 import { tallyLedgerAbi } from "@/lib/contracts/tallyLedgerAbi";
 import { TxStatus } from "@/components/TxStatus";
@@ -20,6 +21,11 @@ import {
 } from "@/components/ui";
 
 export function CreateGroup() {
+  const visit = useFreshOnReturn();
+  return <CreateGroupForm key={visit} />;
+}
+
+function CreateGroupForm() {
   const { config } = useApp();
   const { address, demoAccounts, canWrite, source } = useAccount();
   const names = useDemoNames();

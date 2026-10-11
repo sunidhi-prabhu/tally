@@ -13,6 +13,7 @@ import { useAccount, useApp } from "@/providers/AppProviders";
 import { useLiveQuery } from "@/hooks/useLiveQuery";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useWaitForIndexed } from "@/hooks/useWaitForIndexed";
+import { useFreshOnReturn } from "@/hooks/useFreshOnReturn";
 import { useSettlementToken } from "@/hooks/useSettlementToken";
 import { GROUP_DETAIL, parseGroupDetail } from "@/lib/indexer/queries";
 import { suggestedTransfers, transfersInvolving } from "@/lib/balances";
@@ -53,6 +54,7 @@ const ledgerWithTokenErrors = [
 export function Settle({ groupId }: { groupId: string }) {
   const { address } = useAccount();
   const group = useLiveQuery(GROUP_DETAIL, { id: groupId }, parseGroupDetail);
+  const visit = useFreshOnReturn();
 
   return (
     <>
@@ -71,6 +73,7 @@ export function Settle({ groupId }: { groupId: string }) {
           );
           return (
             <SettlePicker
+              key={visit}
               groupId={groupId}
               me={me}
               options={[...youPay, ...youReceive]}
