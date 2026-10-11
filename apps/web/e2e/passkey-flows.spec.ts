@@ -38,6 +38,20 @@ test("a passkey wallet creates a group, adds an expense, pays and acknowledges",
   ).toBeVisible();
   const groupUrl = page.url();
 
+  // Reloading locks the wallet (as phones often do). The group page must say so and offer the
+  // unlock, not silently hide "Add expense".
+  await page.goto(groupUrl);
+  const myCard = page.getByRole("region", {
+    name: "Your balance in this group",
+  });
+  await expect(myCard.getByText("Your passkey wallet is locked")).toBeVisible();
+  await expect(myCard.getByRole("link", { name: "Add expense" })).toHaveCount(
+    0,
+  );
+  await myCard.getByRole("button", { name: "Unlock with passkey" }).click();
+  await expect(myCard.getByRole("link", { name: "Add expense" })).toBeVisible();
+  await expect(myCard.getByRole("link", { name: "Settle up" })).toBeVisible();
+
   // Expense paid by the passkey wallet: equal split → Demo 1 owes 5.
   await gotoUnlocked(page, `${groupUrl}/expenses/new`);
   await expect(page.getByLabel("Paid by")).toContainText("You");

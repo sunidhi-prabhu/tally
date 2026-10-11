@@ -14,6 +14,7 @@ import {
 } from "@/lib/indexer/queries";
 import { suggestedTransfers, transfersInvolving } from "@/lib/balances";
 import { DataState } from "@/components/DataState";
+import { WriteGate } from "@/components/WriteGate";
 import { BalanceBreakdown } from "@/components/BalanceBreakdown";
 import { ExpenseList } from "@/components/ExpenseList";
 import { SettlementList } from "@/components/SettlementList";
@@ -129,6 +130,13 @@ export function GroupDetail({ groupId }: { groupId: string }) {
                       </li>
                     ))}
                   </ul>
+                )}
+                {/* A member always sees how to act: the buttons, or why they can't send yet
+                    (locked after a reload, or view-only) with the one tap that fixes it. */}
+                {!canAct && (
+                  <div className="mt-4">
+                    <WriteGate />
+                  </div>
                 )}
                 {canAct && (
                   <div className="mt-4 grid grid-cols-2 gap-2">
