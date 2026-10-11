@@ -26,8 +26,15 @@ export interface IndexerHealth {
   lagBlocks: number | undefined;
 }
 
-/** Blocks of lag tolerated before the UI calls indexed data "behind". */
-const LAG_TOLERANCE = 2;
+/**
+ * Blocks of lag tolerated before the UI calls indexed data "behind". Anvil only mines on demand,
+ * so any real lag there is a problem. Monad produces a block about every 0.4 s and the chain head
+ * is polled every 4 s, so a healthy hosted indexer routinely trails by several blocks; 25 blocks
+ * is about 10 seconds.
+ */
+export function lagTolerance(chainId: number): number {
+  return chainId === 31337 ? 2 : 25;
+}
 
 export function classifyHealth(
   meta: IndexerMeta | undefined,
@@ -69,7 +76,10 @@ export function classifyHealth(
     };
   const lag = Math.max(0, Number(head) - meta.progressBlock);
   return {
-    status: meta.isReady && lag <= LAG_TOLERANCE ? "synced" : "behind",
+    status:
+      meta.isReady && lag <= lagTolerance(expectedChainId)
+        ? "synced"
+        : "behind",
     progressBlock,
     chainHead: head,
     lagBlocks: lag,
