@@ -173,11 +173,24 @@ export async function handleRelay(input: {
       });
       if (getAddress(signer) !== wallet)
         return fail(400, "The delegation wasn't signed by this wallet.");
+      // Monad charges the full gas limit, so estimate instead of a generous fixed limit.
+      let delegationGas = 150_000n;
+      try {
+        const estimate = await publicClient.estimateGas({
+          account: sponsor.address,
+          to: wallet,
+          data: "0x",
+          authorizationList: [signed],
+        });
+        delegationGas = (estimate * 13n) / 10n;
+      } catch {
+        // keep the conservative fallback
+      }
       delegationHash = await walletClient.sendTransaction({
         to: wallet,
         data: "0x",
         authorizationList: [signed],
-        gas: 200_000n,
+        gas: delegationGas,
       });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: delegationHash,
