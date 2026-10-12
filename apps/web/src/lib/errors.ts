@@ -43,7 +43,21 @@ const MESSAGES: Record<string, string> = {
   InsufficientFundsError:
     "Not enough MON in this account to pay the network fee.",
   Reentrancy: "The transaction was blocked by the reentrancy guard.",
+  InvitesDisabled: "This group's invite link was turned off by the admin.",
+  InvalidInvite:
+    "This invite link is no longer valid. Ask the admin for a new one.",
+  // TallyAccount (gasless smart account)
+  SignatureExpired: "The request took too long and expired. Try again.",
+  InvalidNonce:
+    "Another action from this wallet went through first. Try again.",
+  InvalidSignature: "The wallet signature didn't match. Nothing was sent.",
+  AccountUnauthorized: "This wallet didn't authorize that action.",
 };
+
+/** Plain-language text for a contract error name, e.g. from the gas sponsor. */
+export function describeContractError(name: string): string {
+  return MESSAGES[name] ?? `The contract rejected this: ${name}.`;
+}
 
 export function describeError(error: unknown): string {
   if (isMeraError(error)) return describePasskeyError(error).message;

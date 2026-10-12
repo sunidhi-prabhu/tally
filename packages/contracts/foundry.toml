@@ -2,6 +2,10 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
 solc = "0.8.37"
 # Monad execution semantics (requires Foundry >= 1.8.0).
 network = "monad"

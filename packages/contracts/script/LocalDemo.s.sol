@@ -3,6 +3,7 @@ pragma solidity 0.8.37;
 
 import {Script, console} from "forge-std/Script.sol";
 import {TallyLedger} from "../src/TallyLedger.sol";
+import {TallyAccount} from "../src/TallyAccount.sol";
 import {MockToken} from "../test/mocks/MockToken.sol";
 
 /// @notice LOCAL ANVIL ONLY. Deploys the test-only MockToken and a TallyLedger, then records a
@@ -15,6 +16,8 @@ import {MockToken} from "../test/mocks/MockToken.sol";
 /// On a fresh anvil the deployer's first two transactions put MockToken at
 /// 0x5FbDB2315678afecb367f032d93F642f64180aa3 and TallyLedger at
 /// 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 (CREATE addresses for nonces 0 and 1).
+/// TallyAccount (EIP-7702 smart-account code for gasless passkey wallets) is deployed by anvil
+/// account 8 at its nonce 0: 0x95bD8D42f30351685e96C62EDdc0d0613bf9a87A (see ACCOUNT_DEPLOYER).
 contract LocalDemo is Script {
     uint256 internal constant AUSD = 1e6;
 
@@ -24,6 +27,8 @@ contract LocalDemo is Script {
     address internal constant CAROL = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
     address internal constant DAVE = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
     address internal constant EVE = 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65;
+    /// anvil account 8; used only to give TallyAccount a fixed local address.
+    address internal constant ACCOUNT_DEPLOYER = 0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f;
 
     function run() external {
         require(block.chainid == 31337, "LocalDemo: anvil (chain 31337) only");
@@ -54,6 +59,10 @@ contract LocalDemo is Script {
         token.approve(address(ledger), 5 * AUSD);
         ledger.settleWithToken(trip, "carol-pays-alice", ALICE, 5 * AUSD);
         vm.stopBroadcast();
+
+        vm.broadcast(ACCOUNT_DEPLOYER);
+        TallyAccount account = new TallyAccount();
+        console.log("TallyAccount", address(account));
 
         // Acknowledged settlement: no tokens move.
         vm.broadcast(ALICE);

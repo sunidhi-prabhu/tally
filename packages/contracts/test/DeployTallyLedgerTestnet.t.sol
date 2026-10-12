@@ -40,6 +40,9 @@ contract DeployTallyLedgerTestnetTest is Test {
     function test_deploysWithVerifiedToken() public {
         // Called directly: the sender is this test contract (not a dev or placeholder account).
         TallyLedger ledger = script.deploy(ausd);
+        // The smart-account code ships in the same broadcast and passes its checks.
+        assertTrue(address(script.account()).code.length > 0);
+        assertEq(script.account().nonce(), 0);
         assertEq(address(ledger.settlementToken()), ausd);
         assertEq(ledger.nextGroupId(), 1);
         assertGt(address(ledger).code.length, 0);

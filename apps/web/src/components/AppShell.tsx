@@ -149,8 +149,10 @@ function ModeBanner() {
   }
   return (
     <p className="rounded-xl bg-accent-bg px-3 py-2 text-xs text-accent">
-      <strong>{config.label}</strong> · Sign in with a passkey wallet to send.
-      Network fees are paid in MON from your wallet.
+      <strong>{config.label}</strong> · Sign in with a passkey wallet to send.{" "}
+      {config.gasless
+        ? "Tally pays the network fees."
+        : "Network fees are paid in MON from your wallet."}
     </p>
   );
 }

@@ -42,14 +42,18 @@ async function tripBalances(): Promise<{ address: string; net: bigint }[]> {
 
 /** Selects the demo account for the first Trip member whose balance matches `sign`. */
 export async function actAsTripMember(page: Page, sign: "debtor" | "creditor") {
-  const member = (await tripBalances()).find((m) =>
-    sign === "debtor" ? m.net < 0n : m.net > 0n,
+  const select = page.getByLabel("Acting as");
+  await expect(select).toBeEnabled();
+  // Only demo accounts can be selected; other tests add passkey members to Trip too.
+  const options = (await select.locator("option").allTextContents()).join(" ");
+  const member = (await tripBalances()).find(
+    (m) =>
+      (sign === "debtor" ? m.net < 0n : m.net > 0n) &&
+      options.includes(`${m.address.slice(0, 6)}…${m.address.slice(-4)}`),
   );
   if (!member)
     throw new Error(`No ${sign} in Trip; reset the local demo (see README).`);
   const short = `${member.address.slice(0, 6)}…${member.address.slice(-4)}`;
-  const select = page.getByLabel("Acting as");
-  await expect(select).toBeEnabled();
   const label = await select
     .locator("option", { hasText: short })
     .textContent();

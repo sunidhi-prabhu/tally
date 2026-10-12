@@ -328,6 +328,7 @@ function PasskeyCard() {
 
       {address &&
         config.mode === "local-demo" &&
+        !config.gasless &&
         native !== undefined &&
         native < 10n ** 16n && (
           <Notice tone="warning" title="This wallet has no MON for fees">
@@ -350,6 +351,7 @@ function PasskeyCard() {
 }
 
 function Limitations() {
+  const { config } = useApp();
   return (
     <Card aria-labelledby="limits-heading" className="space-y-2 text-sm">
       <h2 id="limits-heading" className="font-semibold">
@@ -371,11 +373,22 @@ function Limitations() {
           If you delete the passkey, Tally can&apos;t recover the wallet or its
           funds.
         </li>
-        <li>
-          <strong className="text-foreground">You pay network fees.</strong>{" "}
-          This is not a smart account and fees are not sponsored. Keep some MON
-          in the wallet.
-        </li>
+        {config.gasless ? (
+          <li>
+            <strong className="text-foreground">
+              Tally pays the network fees.
+            </strong>{" "}
+            On first use your passkey wallet is upgraded to a smart account
+            (EIP-7702), so Tally can submit what you sign and pay the fee. You
+            don&apos;t need MON. Only Tally actions are sponsored.
+          </li>
+        ) : (
+          <li>
+            <strong className="text-foreground">You pay network fees.</strong>{" "}
+            This is not a smart account and fees are not sponsored. Keep some
+            MON in the wallet.
+          </li>
+        )}
         <li>
           <strong className="text-foreground">
             Each passkey is a different wallet.

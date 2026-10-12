@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.37;
 
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
 /// @dev The subset of ERC-20 the ledger uses. `transferFrom` is called through a low-level call
 /// so tokens that return nothing are also supported.
 interface IERC20Like {
@@ -25,7 +28,11 @@ interface IERC20Like {
 ///
 /// Authorization:
 /// - Anyone may create a group and becomes its admin and first member.
-/// - Only the admin adds or removes members. Members may leave themselves. The admin cannot
+/// - Only the admin adds or removes members, or enables invite links. Anyone holding a group's
+///   invite key can join it: the admin registers only the key's address (`setInviteSigner`)
+///   and a joiner's app signs "this address joins this group" with the key, so the key itself
+///   never appears on-chain. Changing or clearing the signer revokes old links.
+///   Members may leave themselves. The admin cannot
 ///   be removed or leave. A member can only be removed while their balance is exactly zero,
 ///   so membership changes never alter balances or orphan debts.
 /// - Only a member can record an expense, and only as its payer (`msg.sender`). Participants
@@ -100,10 +107,14 @@ contract TallyLedger {
     /// @notice How a settlement ID was used. IDs are shared across both kinds.
     mapping(uint256 groupId => mapping(bytes32 settlementId => SettlementKind)) public
         settlementKind;
+    /// @notice Address of the group's current invite key; zero means invites are off.
+    mapping(uint256 groupId => address) public inviteSigner;
 
     event GroupCreated(uint256 indexed groupId, address indexed admin, string name);
     event MemberAdded(uint256 indexed groupId, address indexed member, address indexed addedBy);
     event MemberRemoved(uint256 indexed groupId, address indexed member, address indexed removedBy);
+    /// @notice Invite links now need the key for `signer`; zero disables them.
+    event InviteSignerSet(uint256 indexed groupId, address indexed signer);
     /// @dev `participants` and `shares` are parallel arrays; `shares` sum to `amount`.
     event ExpenseRecorded(
         uint256 indexed groupId,
@@ -162,6 +173,8 @@ contract TallyLedger {
     error ExpenseNotActive(bytes32 expenseId);
     error ExpenseDetailsMismatch(bytes32 expenseId);
     error NotAllowedToUndo(uint256 groupId, address account);
+    error InvitesDisabled(uint256 groupId);
+    error InvalidInvite();
     error SelfSettlement();
     error SettlementExceedsDebt(uint256 requested, uint256 max);
     error InvalidToken(address token);
@@ -224,6 +237,35 @@ contract TallyLedger {
     function removeMember(uint256 groupId, address member) external nonReentrant {
         _requireAdmin(groupId);
         _removeMember(groupId, member);
+    }
+
+    /// @notice Admin only. Enables invite links signed by `signer`'s key, replacing (and so
+    /// revoking) any previous one. `address(0)` disables invites.
+    function setInviteSigner(uint256 groupId, address signer) external nonReentrant {
+        _requireAdmin(groupId);
+        inviteSigner[groupId] = signer;
+        emit InviteSignerSet(groupId, signer);
+    }
+
+    /// @notice Joins a group with an invite: `signature` is the group's invite key signing
+    /// `inviteDigest(groupId, msg.sender)`. Bound to the caller, so it can't be reused by
+    /// anyone who sees it in a pending transaction.
+    function joinWithInvite(uint256 groupId, bytes calldata signature) external nonReentrant {
+        _requireGroup(groupId);
+        address signer = inviteSigner[groupId];
+        if (signer == address(0)) revert InvitesDisabled(groupId);
+        (address recovered, ECDSA.RecoverError err,) =
+            ECDSA.tryRecover(inviteDigest(groupId, msg.sender), signature);
+        if (err != ECDSA.RecoverError.NoError || recovered != signer) revert InvalidInvite();
+        _addMember(groupId, msg.sender);
+    }
+
+    /// @notice What an invite key signs (EIP-191 personal message) to let `joiner` join. Binds
+    /// this contract and chain, so an invite can't be replayed elsewhere.
+    function inviteDigest(uint256 groupId, address joiner) public view returns (bytes32) {
+        return MessageHashUtils.toEthSignedMessageHash(
+            keccak256(abi.encode("TallyInvite", block.chainid, address(this), groupId, joiner))
+        );
     }
 
     /// @notice Leave a group. The caller's balance must be exactly zero; the admin cannot leave.
@@ -521,6 +563,9 @@ contract TallyLedger {
         _members[groupId].push(member);
         _memberIndex[groupId][member] = _members[groupId].length;
         group.memberCount += 1;
+        // The only possible earlier call is the ecrecover precompile (joinWithInvite), which
+        // can't re-enter; every entry point is also nonReentrant.
+        // forge-lint: disable-next-line(reentrancy-events)
         emit MemberAdded(groupId, member, msg.sender);
     }
 

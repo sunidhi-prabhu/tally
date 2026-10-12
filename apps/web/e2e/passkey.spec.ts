@@ -16,9 +16,9 @@ test.describe("passkey onboarding", () => {
     await expect(page.getByTestId("account-chip")).toContainText(
       "Passkey wallet",
     );
-    await expect(
-      page.getByText(/This is not a smart account and fees are not sponsored/),
-    ).toBeVisible();
+    // The local demo runs gasless: the limitations card says who pays fees, accurately.
+    await expect(page.getByText("Tally pays the network fees.")).toBeVisible();
+    await expect(page.getByText(/upgraded to a smart account/)).toBeVisible();
     await expectNoHorizontalScroll(page);
     await page.screenshot({
       path: `test-results/screens/${info.project.name}-account.png`,

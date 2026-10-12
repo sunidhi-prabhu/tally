@@ -23,6 +23,13 @@ export interface AppConfig {
   readonly allowDemoAccounts: boolean;
   /** WebAuthn relying-party ID for passkeys; undefined means "this page's hostname". */
   readonly passkeyRpId: string | undefined;
+  /** TallyAccount: the EIP-7702 smart-account code passkey wallets delegate to. */
+  readonly smartAccountAddress: Address | undefined;
+  /**
+   * Passkey wallets send through Tally's sponsor (/api/relay), which pays network fees.
+   * Requires `smartAccountAddress`; off on testnet unless NEXT_PUBLIC_GASLESS=true.
+   */
+  readonly gasless: boolean;
   readonly label: string;
 }
 
@@ -40,6 +47,8 @@ export const LOCAL_DEMO = {
   rpcUrl: "http://127.0.0.1:8545",
   ledgerAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
   mockTokenAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  /** Deployed by anvil account 8 at nonce 0 in LocalDemo.s.sol. */
+  smartAccountAddress: "0x95bD8D42f30351685e96C62EDdc0d0613bf9a87A",
   indexerHttpUrl: "http://localhost:8080/v1/graphql",
 } as const;
 
@@ -55,6 +64,8 @@ export interface PublicEnv {
   readonly NEXT_PUBLIC_AUSD_ADDRESS?: string;
   readonly NEXT_PUBLIC_INDEXER_GRAPHQL_URL?: string;
   readonly NEXT_PUBLIC_PASSKEY_RP_ID?: string;
+  readonly NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS?: string;
+  readonly NEXT_PUBLIC_GASLESS?: string;
 }
 
 const blank = (value: string | undefined) => (value ?? "").trim() || undefined;
@@ -109,6 +120,18 @@ export function resolveConfig(env: PublicEnv): ConfigResult {
   if (!isAddress(token))
     problems.push("NEXT_PUBLIC_AUSD_ADDRESS is not a valid address.");
   if (!indexer) problems.push("NEXT_PUBLIC_INDEXER_GRAPHQL_URL is not set.");
+  const smartAccount =
+    blank(env.NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS) ??
+    (demo ? LOCAL_DEMO.smartAccountAddress : undefined);
+  if (smartAccount && !isAddress(smartAccount))
+    problems.push("NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS is not a valid address.");
+  const gaslessFlag = blank(env.NEXT_PUBLIC_GASLESS);
+  // Local demo: on unless switched off. Testnet: only when explicitly enabled.
+  const gaslessWanted = demo ? gaslessFlag !== "false" : gaslessFlag === "true";
+  if (gaslessWanted && !smartAccount)
+    problems.push(
+      "NEXT_PUBLIC_GASLESS=true needs NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS (the TallyAccount deployment).",
+    );
   if (
     demo &&
     rpcUrl &&
@@ -134,6 +157,11 @@ export function resolveConfig(env: PublicEnv): ConfigResult {
       indexerWsUrl: toWsUrl(indexer),
       allowDemoAccounts: demo,
       passkeyRpId: blank(env.NEXT_PUBLIC_PASSKEY_RP_ID),
+      smartAccountAddress:
+        smartAccount && isAddress(smartAccount)
+          ? getAddress(smartAccount)
+          : undefined,
+      gasless: gaslessWanted && smartAccount !== undefined,
       label: demo ? "Local demo · anvil" : "Monad testnet",
     },
   };
@@ -149,4 +177,7 @@ export const configResult: ConfigResult = resolveConfig({
   NEXT_PUBLIC_AUSD_ADDRESS: process.env.NEXT_PUBLIC_AUSD_ADDRESS,
   NEXT_PUBLIC_INDEXER_GRAPHQL_URL: process.env.NEXT_PUBLIC_INDEXER_GRAPHQL_URL,
   NEXT_PUBLIC_PASSKEY_RP_ID: process.env.NEXT_PUBLIC_PASSKEY_RP_ID,
+  NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS:
+    process.env.NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS,
+  NEXT_PUBLIC_GASLESS: process.env.NEXT_PUBLIC_GASLESS,
 });

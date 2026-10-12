@@ -72,4 +72,35 @@ describe("resolveConfig", () => {
       expect(result.problems).toHaveLength(2);
     }
   });
+
+  it("gasless: on by default in the local demo, opt-in on testnet", () => {
+    const demo = resolveConfig({ NEXT_PUBLIC_TALLY_NETWORK: "local-demo" });
+    expect(demo.status === "ready" && demo.config.gasless).toBe(true);
+    const demoOff = resolveConfig({
+      NEXT_PUBLIC_TALLY_NETWORK: "local-demo",
+      NEXT_PUBLIC_GASLESS: "false",
+    });
+    expect(demoOff.status === "ready" && demoOff.config.gasless).toBe(false);
+
+    const testnet = {
+      NEXT_PUBLIC_TALLY_NETWORK: "monad-testnet",
+      NEXT_PUBLIC_MONAD_RPC_URL: "https://testnet-rpc.monad.xyz",
+      NEXT_PUBLIC_TALLY_LEDGER_ADDRESS:
+        "0x1111111111111111111111111111111111111111",
+      NEXT_PUBLIC_INDEXER_GRAPHQL_URL: "https://indexer.example/v1/graphql",
+    };
+    const off = resolveConfig(testnet);
+    expect(off.status === "ready" && off.config.gasless).toBe(false);
+    const on = resolveConfig({
+      ...testnet,
+      NEXT_PUBLIC_GASLESS: "true",
+      NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS:
+        "0x2222222222222222222222222222222222222222",
+    });
+    expect(on.status === "ready" && on.config.gasless).toBe(true);
+    // Enabling gasless without the smart-account address is a configuration error.
+    expect(
+      resolveConfig({ ...testnet, NEXT_PUBLIC_GASLESS: "true" }).status,
+    ).toBe("unconfigured");
+  });
 });

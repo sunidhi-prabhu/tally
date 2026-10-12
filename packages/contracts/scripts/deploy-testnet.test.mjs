@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildAccountRecord,
   buildManifest,
   checkChain,
   checkCompiler,
@@ -373,6 +374,88 @@ describe("encoding and manifest", () => {
       const f = fixture();
       mutate(f);
       assert.throws(() => buildManifest(f), message);
+    });
+  }
+});
+
+describe("buildAccountRecord (TallyAccount in the same broadcast)", () => {
+  const ACCOUNT = "0x00000000000000000000000000000000000000ac";
+  const accountFixture = () => ({
+    broadcast: {
+      chain: 10143,
+      transactions: [
+        {
+          transactionType: "CREATE",
+          contractName: "TallyLedger",
+          hash: "0x01",
+          contractAddress: "0x0a",
+        },
+        {
+          transactionType: "CREATE",
+          contractName: "TallyAccount",
+          hash: "0x02",
+          contractAddress: ACCOUNT,
+        },
+      ],
+    },
+    receipt: {
+      status: "0x1",
+      transactionHash: "0x02",
+      contractAddress: ACCOUNT,
+      blockNumber: "0x10",
+      gasUsed: "0x20",
+    },
+    // Runtime code with one 2-byte immutable at offset 1, different on-chain (masked).
+    code: "0xaa1234bb",
+    artifact: {
+      deployedBytecode: {
+        object: "0xaa0000bb",
+        immutableReferences: { 7: [{ start: 1, length: 2 }] },
+      },
+    },
+  });
+
+  it("records only verified facts", () => {
+    assert.deepEqual(buildAccountRecord(accountFixture()), {
+      contract: "TallyAccount",
+      address: ACCOUNT,
+      deploymentTxHash: "0x02",
+      deploymentBlock: 16,
+      gasUsed: 32,
+      runtimeBytecodeMatchesBuild: true,
+      explorer: `https://testnet.monadscan.com/address/${ACCOUNT}`,
+    });
+  });
+
+  for (const [name, mutate, message] of [
+    [
+      "no TallyAccount CREATE",
+      (f) => (f.broadcast.transactions = f.broadcast.transactions.slice(0, 1)),
+      /No TallyAccount CREATE/,
+    ],
+    ["failed receipt", (f) => (f.receipt.status = "0x0"), /missing or failed/],
+    [
+      "receipt for another tx",
+      (f) => (f.receipt.transactionHash = "0x99"),
+      /hash differs/,
+    ],
+    [
+      "receipt at another address",
+      (f) =>
+        (f.receipt.contractAddress =
+          "0x00000000000000000000000000000000000000ff"),
+      /address differs/,
+    ],
+    [
+      "different runtime code",
+      (f) => (f.code = "0xcc1234bb"),
+      /does not match the local build/,
+    ],
+  ]) {
+    it(`refuses: ${name}`, () => {
+      const f = accountFixture();
+      mutate(f);
+      assert.throws(() => buildAccountRecord(f), message);
     });
   }
 });

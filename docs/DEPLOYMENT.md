@@ -193,6 +193,27 @@ Envio Cloud assigns the URL after a deployment syncs. Get it from the dashboard,
 
 If Envio Cloud is unavailable, self-host. Run `pnpm --filter @tally/indexer start:testnet`, which runs the same env check first. It needs Docker, Postgres and Hasura, plus the same three variables in `packages/indexer/.env`. Put Hasura behind HTTPS and expose only its public, read-only role. Don't expose the admin secret.
 
+### 7b. Gas sponsor (gasless passkey wallets)
+
+The deploy script ships `TallyAccount` in the same broadcast as `TallyLedger`, and `record`
+saves its verified address under `account` in the manifest. To turn gasless on:
+
+1. **Create a dedicated fee wallet.** Never reuse the deployer or a personal wallet:
+   ```bash
+   cast wallet new            # prints an address and a private key; store the key in a password manager
+   ```
+2. **Fund it with a little MON**, for example 1 MON from the deployer
+   (`cast send <fee wallet> --value 1ether --account tally-deployer --rpc-url https://testnet-rpc.monad.xyz`).
+   The sponsor stops below 0.05 MON.
+3. **Vercel → Settings → Environment Variables:** add `SPONSOR_PRIVATE_KEY` = the fee wallet's
+   key, marked **Sensitive**, for Production (and Preview if you test there). Add
+   `NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS` (manifest `account.address`) and `NEXT_PUBLIC_GASLESS=true`.
+   `env:testnet` prints the public ones; it never prints the key.
+
+Security: only Tally actions are sponsored (`apps/web/src/lib/relay/policy.ts`), signatures fix
+the exact calls, and the fee wallet only ever holds a little testnet MON. Rate limits are per
+server instance, so watch the fee wallet's balance during demos.
+
 ### 8. Web app
 
 ```bash

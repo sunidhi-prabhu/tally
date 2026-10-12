@@ -2,6 +2,17 @@
 
 Foundry project for Tally's Solidity contracts, initialized with `forge init --network monad`.
 
+## TallyAccount (gasless smart account)
+
+`src/TallyAccount.sol` is the EIP-7702 code passkey wallets delegate to, so Tally's sponsor can
+submit what they sign and pay the gas. Built from OpenZeppelin Contracts v5.7.0 (`ERC7821`,
+`SignerEIP7702`, `EIP712`); the only custom logic is `executeWithSignature`: an EIP-712
+`Execute(mode, executionData, nonce, deadline)` signature **by the wallet's own key** (domain
+binds chain ID and wallet address), a one-time nonce in an ERC-7201 namespaced slot, a deadline,
+then the batch. No owner, no upgrades, no modules. `receive()` keeps plain MON transfers working.
+Tests: `test/TallyAccount.t.sol` (wrong signer, other wallet, replay, tampering, expiry, other
+chain, unsupported mode, rollback, fuzzed attacker keys).
+
 ## TallyLedger
 
 `src/TallyLedger.sol` keeps per-group net balances in AUSD base units (6 decimals), mirroring the

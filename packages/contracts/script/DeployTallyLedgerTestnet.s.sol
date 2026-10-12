@@ -3,13 +3,16 @@ pragma solidity 0.8.37;
 
 import {Script, console} from "forge-std/Script.sol";
 import {TallyLedger} from "../src/TallyLedger.sol";
+import {TallyAccount} from "../src/TallyAccount.sol";
 
 interface ITokenMetadata {
     function symbol() external view returns (string memory);
     function decimals() external view returns (uint8);
 }
 
-/// @notice Deploys TallyLedger to MONAD TESTNET (chain 10143) only, settling in Agora AUSD.
+/// @notice Deploys TallyLedger (settling in Agora AUSD) and TallyAccount (the EIP-7702 smart-
+/// account code passkey wallets delegate to) to MONAD TESTNET (chain 10143) only, in one
+/// broadcast.
 ///
 /// Never run this directly with --broadcast. Use the guarded wrapper, which runs preflight
 /// checks first and asks for explicit confirmation:
@@ -39,6 +42,10 @@ contract DeployTallyLedgerTestnet is Script {
     error PostDeployCheckFailed(string what);
 
     event Deployed(address ledger, address deployer, address token, uint256 chainId);
+    event AccountDeployed(address account);
+
+    /// @notice The TallyAccount deployed alongside the ledger by the last `deploy` call.
+    TallyAccount public account;
 
     /// Entry point for `forge script`: reads AUSD_ADDRESS from the environment.
     function run() external returns (TallyLedger) {
@@ -51,14 +58,18 @@ contract DeployTallyLedgerTestnet is Script {
 
         vm.startBroadcast(deployer);
         ledger = new TallyLedger(token);
+        account = new TallyAccount();
         vm.stopBroadcast();
 
         verifyDeployment(ledger, token);
+        verifyAccount(account);
         console.log("chainId", block.chainid);
         console.log("deployer", deployer);
         console.log("settlementToken", token);
         console.log("TallyLedger", address(ledger));
+        console.log("TallyAccount", address(account));
         emit Deployed(address(ledger), deployer, token, block.chainid);
+        emit AccountDeployed(address(account));
     }
 
     /// Every assumption the constructor and the app rely on, checked before broadcasting.
@@ -86,6 +97,17 @@ contract DeployTallyLedgerTestnet is Script {
         if (ledger.TOKEN_DECIMALS() != 6) revert PostDeployCheckFailed("TOKEN_DECIMALS");
         if (ledger.MAX_AMOUNT() != 1e18) revert PostDeployCheckFailed("MAX_AMOUNT");
         if (ledger.nextGroupId() != 1) revert PostDeployCheckFailed("nextGroupId");
+    }
+
+    function verifyAccount(TallyAccount account_) public view {
+        if (address(account_).code.length == 0) revert PostDeployCheckFailed("account code");
+        if (
+            account_.EXECUTE_TYPEHASH()
+                != keccak256(
+                    "Execute(bytes32 mode,bytes executionData,uint256 nonce,uint256 deadline)"
+                )
+        ) revert PostDeployCheckFailed("EXECUTE_TYPEHASH");
+        if (account_.nonce() != 0) revert PostDeployCheckFailed("account nonce");
     }
 
     /// anvil/hardhat default accounts 0-9: their keys are public and must never deploy here.

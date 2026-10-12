@@ -154,7 +154,42 @@ test("mark a payment as received: no tokens move", async ({ page }) => {
   await expect(panel.getByText("Paid in AUSD").first()).toBeVisible();
 });
 
+const LEDGER = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512";
+const DEMO_0 = "f39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+
+/** Demo 0's net balance in group 1, read from the contract (the source of truth). */
+async function contractNet(): Promise<bigint> {
+  const data = `0x9c32f4a1${"1".padStart(64, "0")}${DEMO_0.padStart(64, "0")}`;
+  const res = await fetch("http://127.0.0.1:8545", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_call",
+      params: [{ to: LEDGER, data }, "latest"],
+    }),
+  });
+  return BigInt.asIntN(
+    256,
+    BigInt(((await res.json()) as { result: string }).result),
+  );
+}
+
+/** The app's signed AUSD display: "+12.50 AUSD", "-0.333333 AUSD", "0.00 AUSD". */
+function shown(units: bigint): RegExp {
+  const abs = units < 0n ? -units : units;
+  let fraction = (abs % 1_000_000n).toString().padStart(6, "0");
+  while (fraction.length > 2 && fraction.endsWith("0"))
+    fraction = fraction.slice(0, -1);
+  const sign = units > 0n ? "\\+" : units < 0n ? "-" : "";
+  return new RegExp(`^${sign}${abs / 1_000_000n}\\.${fraction}\\s*AUSD$`);
+}
+
 test("undo an expense, then add a corrected version", async ({ page }) => {
+  // Unique per run, so repeated runs on the same chain don't collide.
+  const typo = `E2E typo ${Date.now()}`;
+  const fixed = `E2E fixed ${Date.now()}`;
   await page.goto("/");
   await actAs(page, 0);
   await page.goto("/groups/1");
@@ -162,12 +197,14 @@ test("undo an expense, then add a corrected version", async ({ page }) => {
     name: "Your balance in this group",
   });
   const balance = myCard.locator("p").first();
-  await expect(balance).toHaveText(/AUSD|\d/);
-  const before = await balance.textContent();
+  // The screen must show what the contract says (earlier tests' transactions may still be
+  // arriving through the live feed), so compare against the contract, not a first read.
+  const contractBefore = await contractNet();
+  await expect(balance).toHaveText(shown(contractBefore), { timeout: 30_000 });
 
   // Record an expense that changes the balance.
   await myCard.getByRole("link", { name: "Add expense", exact: true }).click();
-  await page.getByLabel("Description").fill("E2E typo");
+  await page.getByLabel("Description").fill(typo);
   await page.getByLabel("Amount", { exact: true }).fill("12");
   await page.getByRole("button", { name: "Review expense" }).click();
   await page
@@ -176,12 +213,12 @@ test("undo an expense, then add a corrected version", async ({ page }) => {
     .click();
   await expect(page.getByText("Balances are updated.")).toBeVisible();
   await page.getByRole("link", { name: "Back to group", exact: true }).click();
-  await expect(balance).not.toHaveText(before!);
+  await expect(balance).not.toHaveText(shown(contractBefore));
 
   // Undo it from the Expenses tab.
   await page.getByRole("tab", { name: "Expenses" }).click();
-  const item = page.getByRole("listitem").filter({ hasText: "E2E typo" });
-  await item.getByText("E2E typo").click();
+  const item = page.getByRole("listitem").filter({ hasText: typo });
+  await item.getByText(typo).click();
   await item.getByRole("button", { name: "Undo expense" }).click();
   await page
     .getByRole("dialog", { name: "Undo this expense?" })
@@ -190,17 +227,18 @@ test("undo an expense, then add a corrected version", async ({ page }) => {
   await expect(item.getByText("Undone").first()).toBeVisible({
     timeout: 30_000,
   });
-  // Balances are exactly as before the expense.
-  await expect(balance).toHaveText(before!);
+  // Balances are exactly as before the expense: on-chain, then on screen.
+  await expect.poll(contractNet, { timeout: 30_000 }).toBe(contractBefore);
+  await expect(balance).toHaveText(shown(contractBefore), { timeout: 30_000 });
 
   // "Edit": add a corrected copy, prefilled from the undone one.
   await item.getByRole("link", { name: "Add corrected version" }).click();
   await expect(
     page.getByRole("heading", { name: "Add corrected expense" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Description")).toHaveValue("E2E typo");
+  await expect(page.getByLabel("Description")).toHaveValue(typo);
   await expect(page.getByLabel("Amount", { exact: true })).toHaveValue("12");
-  await page.getByLabel("Description").fill("E2E fixed");
+  await page.getByLabel("Description").fill(fixed);
   await page.getByLabel("Amount", { exact: true }).fill("2");
   await page.getByRole("button", { name: "Review expense" }).click();
   await page

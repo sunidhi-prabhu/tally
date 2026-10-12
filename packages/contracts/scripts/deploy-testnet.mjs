@@ -16,6 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import {
+  buildAccountRecord,
   buildManifest,
   checkChain,
   checkCompiler,
@@ -61,8 +62,8 @@ function forge(argv, extraEnv = {}) {
   });
 }
 
-function readArtifact() {
-  const path = join(ROOT, "out/TallyLedger.sol/TallyLedger.json");
+function readArtifact(name = "TallyLedger") {
+  const path = join(ROOT, `out/${name}.sol/${name}.json`);
   return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
 }
 
@@ -128,19 +129,27 @@ async function preflight() {
   results.push(await checkToken(rpc, token));
 
   let required;
-  if (artifact) {
+  const accountArtifact = readArtifact("TallyAccount");
+  if (artifact && accountArtifact) {
     try {
-      const estimate = await estimateDeployment(
+      // Both contracts go out in the same broadcast: TallyLedger, then TallyAccount.
+      const ledgerEstimate = await estimateDeployment(
         rpc,
         deployer,
         creationData(artifact, token),
       );
+      const accountEstimate = await estimateDeployment(
+        rpc,
+        deployer,
+        accountArtifact.bytecode.object,
+      );
+      const maxCostWei = ledgerEstimate.maxCostWei + accountEstimate.maxCostWei;
       // 20% reserve on top of the full gas limit for price movement between preflight and send.
-      required = (estimate.maxCostWei * 120n) / 100n;
+      required = (maxCostWei * 120n) / 100n;
       results.push({
         name: "Cost estimate",
         ok: true,
-        detail: `gas ${estimate.gas} · limit ${estimate.gasLimit} · price ${estimate.gasPrice} wei · max ${Number(estimate.maxCostWei / 10n ** 12n) / 1e6} MON`,
+        detail: `ledger gas ${ledgerEstimate.gas} + account gas ${accountEstimate.gas} · price ${ledgerEstimate.gasPrice} wei · max ${Number(maxCostWei / 10n ** 12n) / 1e6} MON`,
       });
     } catch (error) {
       results.push({ name: "Cost estimate", ok: false, detail: error.message });
@@ -300,7 +309,7 @@ async function record() {
       : "0x",
   };
   const forgeConfig = JSON.parse(forge(["config", "--json"]).stdout || "{}");
-  const manifest = buildManifest({
+  const ledgerManifest = buildManifest({
     broadcast: broadcastRecord,
     receipt,
     onchain,
@@ -308,6 +317,25 @@ async function record() {
     forgeConfig,
     recordedAt: new Date().toISOString(),
   });
+  const accountCreate = broadcastRecord.transactions.find(
+    (t) => t.transactionType === "CREATE" && t.contractName === "TallyAccount",
+  );
+  if (!accountCreate?.hash)
+    throw new Error("Broadcast record has no TallyAccount transaction hash.");
+  const accountReceipt = await rpc("eth_getTransactionReceipt", [
+    accountCreate.hash,
+  ]);
+  const manifest = {
+    ...ledgerManifest,
+    account: buildAccountRecord({
+      broadcast: broadcastRecord,
+      receipt: accountReceipt,
+      code: accountReceipt?.contractAddress
+        ? await rpc("eth_getCode", [accountReceipt.contractAddress, "latest"])
+        : "0x",
+      artifact: readArtifact("TallyAccount"),
+    }),
+  };
 
   const target = rehearsal
     ? join(ROOT, "deployments/rehearsal/monad-testnet-fork.json")
@@ -333,6 +361,7 @@ async function record() {
         address: manifest.address,
         block: manifest.deploymentBlock,
         tx: manifest.deploymentTxHash,
+        account: manifest.account.address,
       },
       null,
       2,

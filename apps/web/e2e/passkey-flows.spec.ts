@@ -7,7 +7,20 @@ import {
 } from "./helpers";
 
 // Sends real transactions to the LOCAL anvil chain, signed in the browser by a Mera passkey
-// wallet (virtual PRF authenticator). Runs once, on the mobile viewport.
+// wallet (virtual PRF authenticator) and submitted by Tally's gas sponsor (/api/relay): the
+// wallet never holds MON. Runs once, on the mobile viewport.
+
+const RPC = "http://127.0.0.1:8545";
+const TALLY_ACCOUNT = "0x95bd8d42f30351685e96c62eddc0d0613bf9a87a";
+
+async function rpc(method: string, params: unknown[]): Promise<string> {
+  const res = await fetch(RPC, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  return ((await res.json()) as { result: string }).result;
+}
 test("a passkey wallet creates a group, adds an expense, pays and acknowledges", async ({
   page,
 }) => {
@@ -15,9 +28,11 @@ test("a passkey wallet creates a group, adds an expense, pays and acknowledges",
   await addVirtualPasskeyAuthenticator(page);
   const me = await createPasskeyWallet(page);
 
-  // No gas sponsorship: fund the wallet with test MON (local anvil only).
-  await page.getByRole("button", { name: "Add 1 test MON" }).click();
-  await expect(page.getByText(/^1 MON for network fees/)).toBeVisible();
+  // Gasless: no MON needed, and no "add MON" prompt.
+  await expect(page.getByText(/^0 MON for network fees/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add 1 test MON" }),
+  ).toHaveCount(0);
 
   // Create a group with Demo 1 (0x7099…79c8) as a member; the passkey wallet is the admin.
   await gotoUnlocked(page, "/groups/new");
@@ -111,12 +126,9 @@ test("a passkey wallet creates a group, adds an expense, pays and acknowledges",
     await mint.click();
     await expect(pay.getByText("Mint test tokens: confirmed")).toBeVisible();
   }
-  await pay.getByRole("button", { name: /^Approve / }).click();
-  await page
-    .getByRole("dialog", { name: "Approve token spending?" })
-    .getByRole("button", { name: "Approve" })
-    .click();
-  await expect(pay.getByText("Approve: confirmed")).toBeVisible();
+  // One tap: approve + pay are one signed batch; there is no separate Approve step.
+  await expect(pay.getByRole("button", { name: /^Approve / })).toHaveCount(0);
+  await expect(pay.getByText("Tally pays the network fee.")).toBeVisible();
   await pay.getByRole("button", { name: /^Pay .* AUSD$/ }).click();
   await page
     .getByRole("dialog", { name: "Send this payment?" })
@@ -151,4 +163,11 @@ test("a passkey wallet creates a group, adds an expense, pays and acknowledges",
     page.getByRole("button", { name: "Review expense" }),
   ).toBeVisible();
   expect(me).toMatch(/^0x/);
+
+  // On-chain proof: the wallet is an EIP-7702 smart account (delegated to TallyAccount) and
+  // never held or spent MON; every fee above was paid by the sponsor.
+  expect(await rpc("eth_getCode", [me, "latest"])).toBe(
+    `0xef0100${TALLY_ACCOUNT.slice(2)}`,
+  );
+  expect(BigInt(await rpc("eth_getBalance", [me, "latest"]))).toBe(0n);
 });

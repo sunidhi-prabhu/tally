@@ -375,3 +375,44 @@ export function buildManifest({
     recordedAt,
   };
 }
+
+/**
+ * Verified record of the TallyAccount (EIP-7702 smart-account code) deployed in the same
+ * broadcast as the ledger: the CREATE in the broadcast, a successful receipt for it, and
+ * on-chain runtime code equal to the local build (immutables masked).
+ */
+export function buildAccountRecord({ broadcast, receipt, code, artifact }) {
+  const create = broadcast.transactions.find(
+    (t) => t.transactionType === "CREATE" && t.contractName === "TallyAccount",
+  );
+  if (!create)
+    throw new Error(
+      "No TallyAccount CREATE transaction in the broadcast record.",
+    );
+  if (!receipt || receipt.status !== "0x1")
+    throw new Error("TallyAccount deployment receipt missing or failed.");
+  if (receipt.transactionHash?.toLowerCase() !== create.hash?.toLowerCase())
+    throw new Error("TallyAccount receipt hash differs from broadcast.");
+  if (
+    receipt.contractAddress?.toLowerCase() !==
+    create.contractAddress?.toLowerCase()
+  )
+    throw new Error("TallyAccount receipt address differs from broadcast.");
+  const refs = artifact.deployedBytecode.immutableReferences;
+  if (
+    maskImmutables(artifact.deployedBytecode.object, refs) !==
+    maskImmutables(code, refs)
+  )
+    throw new Error(
+      "TallyAccount on-chain runtime bytecode does not match the local build.",
+    );
+  return {
+    contract: "TallyAccount",
+    address: receipt.contractAddress,
+    deploymentTxHash: receipt.transactionHash,
+    deploymentBlock: parseInt(receipt.blockNumber, 16),
+    gasUsed: parseInt(receipt.gasUsed, 16),
+    runtimeBytecodeMatchesBuild: true,
+    explorer: `${MONAD_TESTNET.explorer}/address/${receipt.contractAddress}`,
+  };
+}

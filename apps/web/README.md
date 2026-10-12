@@ -52,13 +52,13 @@ a wallet they own. It uses [Mera](https://mera.category.xyz/) `@category-labs/me
 
 **Verified capabilities (from the SDK's types and docs):**
 
-| Question        | Answer                                                                                                                                                                                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account type    | A regular EOA. The key is derived from the passkey's WebAuthn **PRF** output (BIP-39 → `m/44'/60'/0'/0/0`, Mera's recipe). No smart account, no account abstraction.                                                                                           |
-| Gas sponsorship | None. The wallet pays its own fees in MON. The local demo has a test-only "Add 1 test MON" button (anvil's `anvil_setBalance`).                                                                                                                                |
-| Recovery        | Signing in with the **same passkey** on another device (synced by iCloud Keychain, Google Password Manager or 1Password) recreates the same wallet. If the passkey is deleted, the wallet can't be recovered. Tally offers no export.                          |
-| Authenticators  | Need PRF: iCloud Keychain (Safari/Chrome/Firefox, iOS 18+/macOS 15+), Google Password Manager, 1Password, Windows 11 25H2+, YubiKey 5. **Not**: Chrome's local profile, Bitwarden, Dashlane ([Mera's list](https://mera.category.xyz/authenticator-support/)). |
-| Backend         | None needed or added. Everything runs in the browser.                                                                                                                                                                                                          |
+| Question        | Answer                                                                                                                                                                                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account type    | An EOA whose key is derived from the passkey's WebAuthn **PRF** output (BIP-39 → `m/44'/60'/0'/0/0`, Mera's recipe). With gasless on, it is upgraded to a smart account on first use via **EIP-7702** (Mera's `signAuthorization`), delegating to `TallyAccount`. |
+| Gas sponsorship | Mera has none. Tally adds its own: with `NEXT_PUBLIC_GASLESS`, Tally's sponsor (`/api/relay`) pays fees, so passkey wallets need no MON (see "Gasless" below). Otherwise the wallet pays its own MON.                                                             |
+| Recovery        | Signing in with the **same passkey** on another device (synced by iCloud Keychain, Google Password Manager or 1Password) recreates the same wallet. If the passkey is deleted, the wallet can't be recovered. Tally offers no export.                             |
+| Authenticators  | Need PRF: iCloud Keychain (Safari/Chrome/Firefox, iOS 18+/macOS 15+), Google Password Manager, 1Password, Windows 11 25H2+, YubiKey 5. **Not**: Chrome's local profile, Bitwarden, Dashlane ([Mera's list](https://mera.category.xyz/authenticator-support/)).    |
+| Backend         | Only the gas sponsor (`/api/relay`), when gasless is on. Keys and sessions stay in the browser.                                                                                                                                                                   |
 
 **Session model:**
 
@@ -93,6 +93,37 @@ don't use.
 (Mera's `webAuthnClient` option). Browser tests use Chromium's virtual WebAuthn authenticator
 with PRF (DevTools protocol), so the real `navigator.credentials` path runs. **No physical
 device or real Face ID / Touch ID prompt has been tested.**
+
+## Gasless passkey wallets (EIP-7702 + sponsor)
+
+With `NEXT_PUBLIC_GASLESS=true` (on by default in the local demo), passkey wallets never need MON:
+
+1. **First use:** the wallet signs an EIP-7702 authorization delegating to `TallyAccount`
+   (`packages/contracts/src/TallyAccount.sol`, built on OpenZeppelin 5.7: ERC-7821 batches,
+   `SignerEIP7702`, EIP-712). The sponsor submits it; the wallet becomes a smart account.
+2. **Every action:** the app simulates the batch, the wallet signs one EIP-712 `Execute`
+   (exact calls, one-time nonce, ≤ 10-minute deadline), and `/api/relay` submits
+   `executeWithSignature`, paying the fee. The sponsor can't change what was signed.
+3. **One-tap pay:** approve + `settleWithToken` go in one signed batch.
+
+The sponsor (`src/lib/relay/`) only pays for Tally: TallyLedger member actions and AUSD
+`approve` for the ledger (plus MockToken mints on the local chain), at most 4 calls, value 0. It
+checks the delegation was signed by the wallet itself, simulates before spending, caps gas,
+stops below 0.05 MON, sends one transaction at a time, and rate-limits per wallet and client
+(per server instance: a first line of defence, not a guarantee). `SPONSOR_PRIVATE_KEY` is a
+server-only variable, read at request time and never sent to the browser; public anvil keys
+are refused on any non-local chain. Browser wallets (MetaMask etc.) and demo accounts keep
+paying their own gas.
+
+## Invite links
+
+The admin taps **Create invite link** (Members). The app makes a random invite key, registers
+only its address on-chain (`setInviteSigner`), and shows `…/join/<group>#k=<key>` with a QR
+code. The key lives in the `#fragment`, which browsers never send to a server. On `/join`, the
+friend creates a passkey wallet if needed, then the app signs "this address joins this group"
+with the key and sends `joinWithInvite`. The key never goes on-chain, and a signature only
+works for the address it names. **Reset link** registers a new key (old links stop working);
+**Turn off** disables invites. Anyone holding a live link can join, so share it like a password.
 
 ## Screens
 

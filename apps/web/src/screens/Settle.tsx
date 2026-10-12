@@ -11,7 +11,7 @@ import {
 } from "@tally/core";
 import { useAccount, useApp } from "@/providers/AppProviders";
 import { useLiveQuery } from "@/hooks/useLiveQuery";
-import { useTransaction } from "@/hooks/useTransaction";
+import { useIsSponsored, useTransaction } from "@/hooks/useTransaction";
 import { useWaitForIndexed } from "@/hooks/useWaitForIndexed";
 import { useFreshOnReturn } from "@/hooks/useFreshOnReturn";
 import { useSettlementToken } from "@/hooks/useSettlementToken";
@@ -274,6 +274,8 @@ function PayWithToken({
   const approveTx = useTransaction();
   const settleTx = useTransaction();
   const mintTx = useTransaction();
+  // Gasless passkey wallets: Tally's sponsor pays fees, and approve + pay is one signature.
+  const sponsored = useIsSponsored();
   const [balance, setBalance] = useState<bigint | undefined>(undefined);
   const [allowance, setAllowance] = useState<bigint | undefined>(undefined);
   const [fees, setFees] = useState<{ approve?: bigint; settle?: bigint }>({});
@@ -336,6 +338,7 @@ function PayWithToken({
     amount !== undefined && allowance !== undefined && allowance < amount;
   const maxFeeNeeded = fees.settle ?? fees.approve;
   const lowGas =
+    !sponsored &&
     nativeBalance !== undefined &&
     (nativeBalance === 0n ||
       (maxFeeNeeded !== undefined && nativeBalance < maxFeeNeeded));
@@ -343,7 +346,7 @@ function PayWithToken({
     amount !== undefined && balance !== undefined && balance < amount;
 
   useEffect(() => {
-    if (!tokenAddress || !account || amount === undefined) return;
+    if (sponsored || !tokenAddress || !account || amount === undefined) return;
     let cancelled = false;
     void (async () => {
       const approve = await estimateMaxFee(publicClient, {
@@ -381,6 +384,7 @@ function PayWithToken({
     config.ledgerAddress,
     groupId,
     transfer.to,
+    sponsored,
   ]);
 
   const indexed = useWaitForIndexed(
@@ -455,7 +459,21 @@ function PayWithToken({
       functionName: "settleWithToken",
       args: [BigInt(groupId), id, getAddress(transfer.to), amount],
     } as const;
-    await settleTx.run("Pay", { sender: account, call });
+    if (sponsored && needsApproval && tokenAddress) {
+      // One signature: approve exactly this amount, then pay, in a single batch.
+      const approveCall = {
+        address: tokenAddress,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [config.ledgerAddress, amount],
+      } as const;
+      await settleTx.run("Pay", {
+        sender: account,
+        calls: [approveCall, call],
+      });
+    } else {
+      await settleTx.run("Pay", { sender: account, call });
+    }
     await refresh();
   }
 
@@ -586,77 +604,98 @@ function PayWithToken({
         signerHint="The local anvil node signs for demo accounts."
       />
 
-      <ol className="space-y-3 text-sm">
-        <li className="rounded-xl border border-border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium">1. Approve</span>
-            {needsApproval && !confirmed ? (
-              <Badge tone="warning">Required</Badge>
-            ) : (
-              <Badge tone="positive">Done</Badge>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            Lets the Tally ledger move exactly this amount from your account,
-            once.
-            {fees.approve !== undefined && needsApproval && (
-              <>
-                {" "}
-                Max network fee ≈{" "}
-                {formatNative(fees.approve, chain.nativeCurrency.symbol)}.
-              </>
-            )}
-          </p>
-          {needsApproval && !confirmed && (
-            <Button
-              className="mt-2 w-full"
-              variant="secondary"
-              disabled={busy || amount === undefined || insufficient}
-              onClick={() => setDialog("approve")}
-            >
-              Approve {amount !== undefined ? formatAusd(amount) : ""}{" "}
-              {token.symbol}
-            </Button>
-          )}
-          <div className="mt-2">
-            <TxStatus
-              state={approveTx.state}
-              signerHint="The local anvil node signs for demo accounts."
-            />
-          </div>
-        </li>
-        <li className="rounded-xl border border-border p-3">
-          <span className="font-medium">2. Pay</span>
-          <p className="mt-1 text-xs text-muted">
-            {fees.settle !== undefined ? (
-              <>
-                Max network fee ≈{" "}
-                {formatNative(fees.settle, chain.nativeCurrency.symbol)}. Monad
-                charges for the full gas limit.
-              </>
-            ) : (
-              "Fee estimate available after approval."
-            )}
-          </p>
+      {sponsored ? (
+        <div className="space-y-2 text-sm">
           {!confirmed && (
             <Button
-              className="mt-2 w-full"
-              disabled={
-                busy || amount === undefined || needsApproval || insufficient
-              }
+              className="w-full"
+              disabled={busy || amount === undefined || insufficient}
               onClick={() => setDialog("settle")}
             >
               Pay {amount !== undefined ? formatAusd(amount) : ""} AUSD
             </Button>
           )}
-          <div className="mt-2">
-            <TxStatus
-              state={settleTx.state}
-              signerHint="The local anvil node signs for demo accounts."
-            />
-          </div>
-        </li>
-      </ol>
+          <p className="text-xs text-muted">
+            One confirmation with your passkey. Tally pays the network fee.
+          </p>
+          <TxStatus
+            state={settleTx.state}
+            signerHint="Confirm with your passkey."
+          />
+        </div>
+      ) : (
+        <ol className="space-y-3 text-sm">
+          <li className="rounded-xl border border-border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">1. Approve</span>
+              {needsApproval && !confirmed ? (
+                <Badge tone="warning">Required</Badge>
+              ) : (
+                <Badge tone="positive">Done</Badge>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              Lets the Tally ledger move exactly this amount from your account,
+              once.
+              {fees.approve !== undefined && needsApproval && (
+                <>
+                  {" "}
+                  Max network fee ≈{" "}
+                  {formatNative(fees.approve, chain.nativeCurrency.symbol)}.
+                </>
+              )}
+            </p>
+            {needsApproval && !confirmed && (
+              <Button
+                className="mt-2 w-full"
+                variant="secondary"
+                disabled={busy || amount === undefined || insufficient}
+                onClick={() => setDialog("approve")}
+              >
+                Approve {amount !== undefined ? formatAusd(amount) : ""}{" "}
+                {token.symbol}
+              </Button>
+            )}
+            <div className="mt-2">
+              <TxStatus
+                state={approveTx.state}
+                signerHint="The local anvil node signs for demo accounts."
+              />
+            </div>
+          </li>
+          <li className="rounded-xl border border-border p-3">
+            <span className="font-medium">2. Pay</span>
+            <p className="mt-1 text-xs text-muted">
+              {fees.settle !== undefined ? (
+                <>
+                  Max network fee ≈{" "}
+                  {formatNative(fees.settle, chain.nativeCurrency.symbol)}.
+                  Monad charges for the full gas limit.
+                </>
+              ) : (
+                "Fee estimate available after approval."
+              )}
+            </p>
+            {!confirmed && (
+              <Button
+                className="mt-2 w-full"
+                disabled={
+                  busy || amount === undefined || needsApproval || insufficient
+                }
+                onClick={() => setDialog("settle")}
+              >
+                Pay {amount !== undefined ? formatAusd(amount) : ""} AUSD
+              </Button>
+            )}
+            <div className="mt-2">
+              <TxStatus
+                state={settleTx.state}
+                signerHint="The local anvil node signs for demo accounts."
+              />
+            </div>
+          </li>
+        </ol>
+      )}
 
       {confirmed && (
         <>
@@ -703,11 +742,15 @@ function PayWithToken({
           />
           . This can&apos;t be undone.
         </p>
-        {fees.settle !== undefined && (
-          <p className="text-xs text-muted">
-            Max network fee ≈{" "}
-            {formatNative(fees.settle, chain.nativeCurrency.symbol)}.
-          </p>
+        {sponsored ? (
+          <p className="text-xs text-muted">Tally pays the network fee.</p>
+        ) : (
+          fees.settle !== undefined && (
+            <p className="text-xs text-muted">
+              Max network fee ≈{" "}
+              {formatNative(fees.settle, chain.nativeCurrency.symbol)}.
+            </p>
+          )
         )}
       </ConfirmDialog>
     </Card>

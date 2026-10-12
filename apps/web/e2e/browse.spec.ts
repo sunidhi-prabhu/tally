@@ -58,7 +58,15 @@ test.describe("browsing indexed data", () => {
     await expect(panel.getByText(/No tokens moved/).first()).toBeVisible();
 
     await page.getByRole("tab", { name: "Expenses" }).click();
-    await expect(page.getByRole("tabpanel").getByText("Snacks")).toBeVisible();
+    // The demo's "Snacks" may be pages back once other tests have added expenses.
+    const snacks = page.getByRole("tabpanel").getByText("Snacks");
+    const more = page.getByRole("button", { name: "Show more" });
+    // The button hides while the next page loads, so keep checking for ~15 s.
+    for (let i = 0; i < 50 && !(await snacks.isVisible()); i++) {
+      if (await more.isVisible()) await more.click();
+      await page.waitForTimeout(300);
+    }
+    await expect(snacks).toBeVisible();
     await page.getByRole("tabpanel").getByText("Snacks").click();
     await expect(page.getByRole("list", { name: "Shares" })).toBeVisible();
     await expectNoHorizontalScroll(page);

@@ -9,7 +9,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { GROUP_DETAIL, parseGroupDetail } from "@/lib/indexer/queries";
 import { tallyLedgerAbi } from "@/lib/contracts/tallyLedgerAbi";
 import { DataState } from "@/components/DataState";
-import { QrCode } from "@/components/QrCode";
+import { InviteLink } from "@/components/InviteLink";
 import { TxStatus } from "@/components/TxStatus";
 import { useDemoNames } from "@/components/AppShell";
 import {
@@ -34,15 +34,6 @@ export function Members({ groupId }: { groupId: string }) {
   const [pending, setPending] = useState<
     { kind: "add" | "remove" | "leave"; member: string } | undefined
   >();
-  const [copied, setCopied] = useState(false);
-  // Native share sheet on phones; hidden where the browser has none.
-  const canShare =
-    typeof navigator !== "undefined" && typeof navigator.share === "function";
-  // Rendered only after indexed data loads in the browser, so window is available.
-  const link =
-    typeof window === "undefined"
-      ? `/groups/${groupId}`
-      : `${window.location.origin}/groups/${groupId}`;
 
   async function run() {
     const action = pending;
@@ -103,47 +94,12 @@ export function Members({ groupId }: { groupId: string }) {
                 <h2 id="invite-heading" className="font-semibold">
                   Invite someone
                 </h2>
-                <p className="text-sm text-muted">
-                  Tally groups have no self-join or invite codes: the admin adds
-                  each member by address. Share this link so people can see the
-                  group and send the admin their address.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    aria-label="Group link"
-                    value={link}
-                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm"
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() =>
-                      void navigator.clipboard?.writeText(link).then(
-                        () => setCopied(true),
-                        () => setCopied(false),
-                      )
-                    }
-                  >
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <QrCode
-                  value={link}
-                  label={`QR code for the ${g.name} group link`}
+                <InviteLink
+                  groupId={groupId}
+                  groupName={g.name}
+                  isAdmin={isAdmin}
+                  canWrite={canWrite}
                 />
-                {canShare && (
-                  <Button
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() =>
-                      void navigator
-                        .share({ title: `Join ${g.name} on Tally`, url: link })
-                        .catch(() => undefined)
-                    }
-                  >
-                    Share link
-                  </Button>
-                )}
                 {isAdmin && canWrite ? (
                   <form
                     className="space-y-2"

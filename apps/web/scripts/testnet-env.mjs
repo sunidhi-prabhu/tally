@@ -53,4 +53,12 @@ NEXT_PUBLIC_MONAD_RPC_URL=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_TALLY_LEDGER_ADDRESS=${manifest.address}
 NEXT_PUBLIC_AUSD_ADDRESS=${manifest.settlementToken.address}
 NEXT_PUBLIC_INDEXER_GRAPHQL_URL=${indexer}
-NEXT_PUBLIC_PASSKEY_RP_ID=${rpId}`);
+NEXT_PUBLIC_PASSKEY_RP_ID=${rpId}${
+  manifest.account?.address
+    ? `
+NEXT_PUBLIC_TALLY_ACCOUNT_ADDRESS=${manifest.account.address}
+NEXT_PUBLIC_GASLESS=true
+# Also set SPONSOR_PRIVATE_KEY (the fee wallet's key) as a SENSITIVE server-only variable.
+# It is not printed here and must never be committed.`
+    : ""
+}`);

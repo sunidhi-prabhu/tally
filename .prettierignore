@@ -27,3 +27,4 @@ packages/indexer/src/core/
 # Playwright output
 apps/web/test-results/
 apps/web/playwright-report/
+apps/web/src/lib/contracts/tallyAccountAbi.ts
