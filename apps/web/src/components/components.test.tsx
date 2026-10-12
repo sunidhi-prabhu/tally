@@ -75,28 +75,48 @@ describe("settlement display", () => {
   });
 });
 
+const expenseRow = (overrides: Partial<ExpenseRow> = {}): ExpenseRow => ({
+  id: "1-0xaa",
+  expenseId: "0xaa",
+  description: "Dinner",
+  amount: 30_000_000n,
+  splitType: "EQUAL",
+  payer: BOB,
+  txHash: HASH,
+  timestamp: Math.floor(Date.now() / 1000),
+  shares: [
+    { member: BOB, amount: 10_000_000n },
+    { member: ME, amount: 10_000_000n },
+  ],
+  undone: false,
+  undoneBy: undefined,
+  undoneTxHash: undefined,
+  ...overrides,
+});
+
 describe("expense list", () => {
   it("shows payer, amount, your share and the split", () => {
-    const expense: ExpenseRow = {
-      id: "1-0xaa",
-      description: "Dinner",
-      amount: 30_000_000n,
-      splitType: "EQUAL",
-      payer: BOB,
-      txHash: HASH,
-      timestamp: Math.floor(Date.now() / 1000),
-      shares: [
-        { member: BOB, amount: 10_000_000n },
-        { member: ME, amount: 10_000_000n },
-      ],
-    };
-    render(<ExpenseList items={[expense]} me={ME} names={names} />);
+    render(<ExpenseList items={[expenseRow()]} me={ME} names={names} />);
     expect(screen.getByText("Dinner")).toBeTruthy();
     expect(screen.getByText("Split equally")).toBeTruthy();
     expect(screen.getByText("Your share")).toBeTruthy();
+    expect(screen.queryByText("Undone")).toBeNull();
     expect(screen.getAllByText("30.00").length).toBeGreaterThan(0);
     const shares = screen.getByRole("list", { name: "Shares" });
     expect(within(shares).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("marks an undone expense and stops showing your share", () => {
+    render(
+      <ExpenseList
+        items={[expenseRow({ undone: true, undoneBy: BOB })]}
+        me={ME}
+        names={names}
+      />,
+    );
+    expect(screen.getAllByText("Undone").length).toBeGreaterThan(0);
+    expect(screen.getByText(/It no longer counts in anyone/)).toBeTruthy();
+    expect(screen.queryByText("Your share")).toBeNull();
   });
 });
 

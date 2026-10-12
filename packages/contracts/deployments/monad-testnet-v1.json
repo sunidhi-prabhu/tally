@@ -1,0 +1,28 @@
+{
+  "network": "monad-testnet",
+  "chainId": 10143,
+  "status": "deployed",
+  "contract": "TallyLedger",
+  "address": "0x07d6ec522de5119eea1bdb6aba5de879cfec6bb5",
+  "deployer": "0xf268e7e91fcc13d36619d1806849c21760b654b7",
+  "settlementToken": {
+    "address": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC",
+    "symbol": "AUSD",
+    "decimals": 6
+  },
+  "constructorArgs": ["0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC"],
+  "deploymentTxHash": "0x8caf5d1b2b10d59f0e0c3d92a584ca63f11bb40ebdc78bd486cb7c302bcc23f4",
+  "deploymentBlock": 69887060,
+  "gasUsed": 3994901,
+  "compiler": {
+    "version": "0.8.37+commit.f401782d",
+    "evmVersion": "osaka",
+    "optimizer": false,
+    "viaIR": false,
+    "network": "monad",
+    "hardfork": "monad:MonadNine"
+  },
+  "runtimeBytecodeMatchesBuild": true,
+  "explorer": "https://testnet.monadscan.com/address/0x07d6ec522de5119eea1bdb6aba5de879cfec6bb5",
+  "recordedAt": "2026-10-10T17:40:07.152Z"
+}

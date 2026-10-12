@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { getAddress, type Address, type Hex } from "viem";
 import { useAccount, useApp } from "@/providers/AppProviders";
@@ -8,10 +9,17 @@ import { useLiveQuery } from "@/hooks/useLiveQuery";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useFreshOnReturn } from "@/hooks/useFreshOnReturn";
 import { useWaitForIndexed } from "@/hooks/useWaitForIndexed";
-import { GROUP_DETAIL, parseGroupDetail } from "@/lib/indexer/queries";
+import {
+  EXPENSE_BY_ID,
+  GROUP_DETAIL,
+  parseExpense,
+  parseGroupDetail,
+} from "@/lib/indexer/queries";
 import {
   buildExpense,
+  draftFromExpense,
   remainingToAssign,
+  type ExpenseFormDraft,
   type SplitMode,
 } from "@/lib/expenseForm";
 import { tallyLedgerAbi } from "@/lib/contracts/tallyLedgerAbi";
@@ -35,20 +43,47 @@ import {
 export function NewExpense({ groupId }: { groupId: string }) {
   const group = useLiveQuery(GROUP_DETAIL, { id: groupId }, parseGroupDetail);
   const visit = useFreshOnReturn();
+  // "Add corrected version" of an undone expense: /groups/1/expenses/new?from=<expense id>
+  const fromParam = useSearchParams().get("from");
+  const from = fromParam?.startsWith(`${groupId}-`) ? fromParam : undefined;
+  const source = useLiveQuery(
+    EXPENSE_BY_ID,
+    useMemo(() => ({ id: from ?? "" }), [from]),
+    parseExpense,
+    { enabled: from !== undefined },
+  );
+  // Not found or unreadable: fall back to an empty form rather than waiting forever.
+  const sourceReady = !from || source.status !== "loading";
   return (
     <>
       <Link href={`/groups/${groupId}`} className="text-sm text-accent">
         ← Back to group
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">Add expense</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {from ? "Add corrected expense" : "Add expense"}
+      </h1>
       <DataState result={group} label="group members">
         {(g) =>
           g ? (
-            <ExpenseForm
-              key={visit}
-              groupId={groupId}
-              members={g.members.filter((m) => m.active).map((m) => m.address)}
-            />
+            !sourceReady ? (
+              <Notice>Loading the original expense…</Notice>
+            ) : (
+              <ExpenseForm
+                key={`${visit}-${from ?? ""}`}
+                groupId={groupId}
+                members={g.members
+                  .filter((m) => m.active)
+                  .map((m) => m.address)}
+                draft={
+                  source.data
+                    ? draftFromExpense(
+                        source.data,
+                        g.members.filter((m) => m.active).map((m) => m.address),
+                      )
+                    : undefined
+                }
+              />
+            )
           ) : (
             <EmptyState title="Group not found" />
           )
@@ -61,9 +96,12 @@ export function NewExpense({ groupId }: { groupId: string }) {
 function ExpenseForm({
   groupId,
   members,
+  draft,
 }: {
   groupId: string;
   members: string[];
+  /** Initial values, e.g. copied from an undone expense. */
+  draft?: ExpenseFormDraft;
 }) {
   const { config } = useApp();
   const { address, canWrite, signableAccounts, source } = useAccount();
@@ -76,12 +114,16 @@ function ExpenseForm({
   const [payer, setPayer] = useState<string>(
     address && signable.includes(address) ? address : (signable[0] ?? ""),
   );
-  const [description, setDescription] = useState("");
-  const [amountText, setAmountText] = useState("");
-  const [splitMode, setSplitMode] = useState<SplitMode>("equal");
-  const [participants, setParticipants] = useState<string[]>(members);
+  const [description, setDescription] = useState(draft?.description ?? "");
+  const [amountText, setAmountText] = useState(draft?.amountText ?? "");
+  const [splitMode, setSplitMode] = useState<SplitMode>(
+    draft?.splitMode ?? "equal",
+  );
+  const [participants, setParticipants] = useState<string[]>(
+    draft ? [...draft.participants] : members,
+  );
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>(
-    {},
+    draft ? { ...draft.customAmounts } : {},
   );
   const [showErrors, setShowErrors] = useState(false);
   const [confirming, setConfirming] = useState(false);

@@ -1,5 +1,6 @@
 import {
   MAX_DESCRIPTION_LENGTH,
+  formatAmount,
   isTallyError,
   parseAmount,
   splitCustom,
@@ -165,4 +166,40 @@ export function remainingToAssign(
     }
   }
   return amount - total;
+}
+
+/** Initial form values. */
+export type ExpenseFormDraft = Pick<
+  ExpenseFormInput,
+  "description" | "amountText" | "splitMode" | "participants" | "customAmounts"
+>;
+
+/**
+ * Form values for a corrected copy of an (undone) expense: same description, amount and split.
+ * Participants who are no longer members are dropped; a custom split then no longer adds up,
+ * which the form reports before anything can be sent.
+ */
+export function draftFromExpense(
+  expense: {
+    description: string;
+    amount: bigint;
+    splitType: "EQUAL" | "CUSTOM";
+    shares: readonly { member: string; amount: bigint }[];
+  },
+  members: readonly string[],
+): ExpenseFormDraft {
+  const current = new Set(members);
+  const kept = expense.shares.filter((s) => current.has(s.member));
+  const exact = (units: bigint) =>
+    formatAmount(units, { minFractionDigits: 0 });
+  return {
+    description: expense.description,
+    amountText: exact(expense.amount),
+    splitMode: expense.splitType === "EQUAL" ? "equal" : "custom",
+    participants: kept.map((s) => s.member),
+    customAmounts:
+      expense.splitType === "EQUAL"
+        ? {}
+        : Object.fromEntries(kept.map((s) => [s.member, exact(s.amount)])),
+  };
 }

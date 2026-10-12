@@ -7,6 +7,7 @@ export type ActivityTypeName =
   | "MEMBER_ADDED"
   | "MEMBER_REMOVED"
   | "EXPENSE_RECORDED"
+  | "EXPENSE_UNDONE"
   | "SETTLEMENT_ACKNOWLEDGED"
   | "SETTLEMENT_TOKEN_TRANSFER";
 
@@ -254,6 +255,26 @@ export function parseGroupDetail(data: unknown): GroupDetail | null {
   };
 }
 
+const EXPENSE_FIELDS = /* GraphQL */ `
+  fragment ExpenseFields on Expense {
+    id
+    expenseId
+    description
+    amount
+    splitType
+    payer
+    txHash
+    blockTimestamp
+    undone
+    undoneBy
+    undoneTxHash
+    shares(order_by: { position: asc }) {
+      member
+      amount
+    }
+  }
+`;
+
 export const GROUP_EXPENSES = /* GraphQL */ `
   query GroupExpenses($id: String!, $limit: Int!, $offset: Int!) {
     Expense(
@@ -262,34 +283,42 @@ export const GROUP_EXPENSES = /* GraphQL */ `
       limit: $limit
       offset: $offset
     ) {
-      id
-      description
-      amount
-      splitType
-      payer
-      txHash
-      blockTimestamp
-      shares(order_by: { position: asc }) {
-        member
-        amount
-      }
+      ...ExpenseFields
     }
   }
+  ${EXPENSE_FIELDS}
+`;
+
+/** One expense by entity ID ("<groupId>-<expenseId>"), e.g. to prefill a corrected copy. */
+export const EXPENSE_BY_ID = /* GraphQL */ `
+  query ExpenseById($id: String!) {
+    Expense(where: { id: { _eq: $id } }) {
+      ...ExpenseFields
+    }
+  }
+  ${EXPENSE_FIELDS}
 `;
 
 export interface ExpenseRow {
   id: string;
+  /** The contract's bytes32 expense ID. */
+  expenseId: `0x${string}`;
   description: string;
   amount: bigint;
   splitType: "EQUAL" | "CUSTOM";
   payer: string;
   txHash: string;
   timestamp: number;
+  /** In the order the contract received them, which `undoExpense` requires. */
   shares: { member: string; amount: bigint }[];
+  undone: boolean;
+  undoneBy: string | undefined;
+  undoneTxHash: string | undefined;
 }
 
 interface RawExpense {
   id: string;
+  expenseId: `0x${string}`;
   description: string;
   amount: string;
   splitType: "EQUAL" | "CUSTOM";
@@ -297,11 +326,15 @@ interface RawExpense {
   txHash: string;
   blockTimestamp: number;
   shares: { member: string; amount: string }[];
+  undone: boolean;
+  undoneBy: string | null;
+  undoneTxHash: string | null;
 }
 
 export function parseExpenses(data: unknown): ExpenseRow[] {
   return ((data as { Expense: RawExpense[] }).Expense ?? []).map((e) => ({
     id: e.id,
+    expenseId: e.expenseId,
     description: e.description,
     amount: big(e.amount),
     splitType: e.splitType,
@@ -309,8 +342,14 @@ export function parseExpenses(data: unknown): ExpenseRow[] {
     txHash: e.txHash,
     timestamp: e.blockTimestamp,
     shares: e.shares.map((s) => ({ member: s.member, amount: big(s.amount) })),
+    undone: e.undone,
+    undoneBy: e.undoneBy ?? undefined,
+    undoneTxHash: e.undoneTxHash ?? undefined,
   }));
 }
+
+export const parseExpense = (data: unknown): ExpenseRow | undefined =>
+  parseExpenses(data)[0];
 
 export const GROUP_SETTLEMENTS = /* GraphQL */ `
   query GroupSettlements($id: String!, $limit: Int!, $offset: Int!) {

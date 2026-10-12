@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildExpense,
+  draftFromExpense,
   remainingToAssign,
   type ExpenseFormInput,
 } from "./expenseForm";
@@ -119,5 +120,75 @@ describe("custom split", () => {
     expect(remainingToAssign("10", { a: "4", b: "" })).toBe(6_000_000n);
     expect(remainingToAssign("10", { a: "12" })).toBe(-2_000_000n);
     expect(remainingToAssign("ten", { a: "1" })).toBeUndefined();
+  });
+});
+
+describe("draftFromExpense (add a corrected version)", () => {
+  // Contract order is ascending by address: BOB (0x7099…) before ALICE (0xf39f…).
+  const A = BOB;
+  const B = ALICE;
+
+  it("copies an equal split so it rebuilds the same expense", () => {
+    const draft = draftFromExpense(
+      {
+        description: "Dinner",
+        amount: 10_000_001n,
+        splitType: "EQUAL",
+        shares: [
+          { member: A, amount: 5_000_001n },
+          { member: B, amount: 5_000_000n },
+        ],
+      },
+      members,
+    );
+    expect(draft).toEqual({
+      description: "Dinner",
+      amountText: "10.000001",
+      splitMode: "equal",
+      participants: [A, B],
+      customAmounts: {},
+    });
+    const rebuilt = buildExpense({ ...draft, members });
+    expect(rebuilt.ok && rebuilt.payload.amount).toBe(10_000_001n);
+  });
+
+  it("copies custom shares exactly", () => {
+    const draft = draftFromExpense(
+      {
+        description: "Taxi",
+        amount: 10_000_000n,
+        splitType: "CUSTOM",
+        shares: [
+          { member: A, amount: 6_000_000n },
+          { member: B, amount: 4_000_000n },
+        ],
+      },
+      members,
+    );
+    expect(draft.customAmounts).toEqual({ [A]: "6", [B]: "4" });
+    const rebuilt = buildExpense({ ...draft, members });
+    expect(rebuilt.ok && rebuilt.payload.shares).toEqual([
+      6_000_000n,
+      4_000_000n,
+    ]);
+  });
+
+  it("drops people who are no longer members", () => {
+    const draft = draftFromExpense(
+      {
+        description: "Taxi",
+        amount: 10_000_000n,
+        splitType: "EQUAL",
+        shares: [
+          { member: A, amount: 5_000_000n },
+          {
+            member: "0x00000000000000000000000000000000000000ff",
+            amount: 5_000_000n,
+          },
+        ],
+      },
+      members,
+    );
+    expect(draft.participants).toEqual([A]);
   });
 });

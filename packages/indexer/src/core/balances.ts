@@ -4,6 +4,7 @@ import { assertEntityId, assertMember, assertValidGroup } from "./members";
 import { assertPositiveAmount } from "./money";
 import { assertValidExpense } from "./split";
 import type {
+  Expense,
   Group,
   LedgerEntry,
   MemberId,
@@ -91,12 +92,28 @@ function assertSettlementEntry(group: Group, settlement: Settlement): void {
   }
 }
 
+/** Same payer, amount and shares (in the same order) as the expense recorded under its ID. */
+function sameExpense(a: Expense, b: Expense): boolean {
+  return (
+    a.payer === b.payer &&
+    a.amount === b.amount &&
+    a.shares.length === b.shares.length &&
+    a.shares.every(
+      (share, i) =>
+        share.member === b.shares[i]!.member &&
+        share.amount === b.shares[i]!.amount,
+    )
+  );
+}
+
 /**
  * Replays a group's ledger (oldest first) and returns each member's net balance, in
  * `group.members` order.
  *
  * - Expense: the payer is credited the full amount; each participant is debited their share.
  *   A payer who also participates therefore nets `amount - ownShare`.
+ * - Expense undone: exactly reverses an earlier, still active expense with the same ID and
+ *   identical payer, amount and shares. An expense can be undone once; its ID stays used.
  * - Settlement (either kind): validated against the balances at that point in the ledger
  *   (`assertSettlementAllowed`), then the payer's debt and the recipient's credit both
  *   shrink by the amount. IDs are unique across both kinds, as in the contract.
@@ -121,7 +138,9 @@ export function computeBalances(
     net.set(member, (net.get(member) ?? 0n) + delta);
   const snapshot = (): NetBalance[] =>
     group.members.map((member) => ({ member, net: net.get(member) ?? 0n }));
+  /** Recorded expenses by ID; removed from `active` once undone. */
   const seenExpenses = new Set<string>();
+  const active = new Map<string, Expense>();
   const seenSettlements = new Set<string>();
 
   for (const entry of entries) {
@@ -134,6 +153,25 @@ export function computeBalances(
         });
       }
       seenExpenses.add(expense.id);
+      active.set(expense.id, expense);
+    } else if (entry.kind === "expenseUndone") {
+      const { expense } = entry;
+      const recorded = active.get(expense.id);
+      if (!recorded) {
+        throw new TallyError(
+          "EXPENSE_NOT_ACTIVE",
+          "Only a recorded, not yet undone expense can be undone",
+          { id: expense.id },
+        );
+      }
+      if (!sameExpense(recorded, expense)) {
+        throw new TallyError(
+          "EXPENSE_MISMATCH",
+          "Undo details differ from the recorded expense",
+          { id: expense.id },
+        );
+      }
+      active.delete(expense.id);
     } else {
       const { settlement } = entry;
       assertSettlementEntry(group, settlement);
@@ -161,6 +199,7 @@ export function computeBalances(
  *
  * - Expense: payer +amount, each participant −share (a participating payer nets
  *   `amount − ownShare`).
+ * - Expense undone: the exact negation of that expense's deltas.
  * - Settlement (either kind, counted once): debtor (`from`) +amount, creditor (`to`) −amount.
  *
  * Deltas for the same member are combined, and zero deltas are omitted, so the result always
@@ -175,9 +214,11 @@ export function ledgerEntryDeltas(
   const deltas = new Map<MemberId, bigint>();
   const add = (member: MemberId, delta: bigint) =>
     deltas.set(member, (deltas.get(member) ?? 0n) + delta);
-  if (entry.kind === "expense") {
-    add(entry.expense.payer, entry.expense.amount);
-    for (const share of entry.expense.shares) add(share.member, -share.amount);
+  if (entry.kind === "expense" || entry.kind === "expenseUndone") {
+    const sign = entry.kind === "expense" ? 1n : -1n;
+    add(entry.expense.payer, sign * entry.expense.amount);
+    for (const share of entry.expense.shares)
+      add(share.member, -sign * share.amount);
   } else {
     add(entry.settlement.from, entry.settlement.amount);
     add(entry.settlement.to, -entry.settlement.amount);

@@ -22,6 +22,12 @@ function describe(item: Activity, me: string, names: Record<string, string>) {
           {who(item.actor)} added “{item.description ?? "expense"}”
         </>
       );
+    case "EXPENSE_UNDONE":
+      return (
+        <>
+          {who(item.actor)} undid “{item.description ?? "expense"}”
+        </>
+      );
     case "SETTLEMENT_TOKEN_TRANSFER":
       return <>{who(item.actor)} paid in AUSD</>;
     case "SETTLEMENT_ACKNOWLEDGED":

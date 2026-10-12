@@ -18,6 +18,7 @@ enum ActivityType {
   MEMBER_ADDED
   MEMBER_REMOVED
   EXPENSE_RECORDED
+  EXPENSE_UNDONE
   SETTLEMENT_ACKNOWLEDGED
   SETTLEMENT_TOKEN_TRANSFER
 }
@@ -33,10 +34,10 @@ type Group {
   name: String!
   admin: String! @index
   memberCount: Int!
-  expenseCount: Int!
+  expenseCount: Int! # active (not undone) expenses
   settlementCount: Int!
   activityCount: Int!
-  totalExpenseAmount: BigInt!
+  totalExpenseAmount: BigInt! # sum of active expenses
   totalTokenSettled: BigInt!
   totalAcknowledged: BigInt!
   createdAtBlock: Int!
@@ -73,7 +74,16 @@ type Expense {
   splitType: SplitType!
   description: String!
   participantCount: Int!
+  # Lowercase, in the order the contract received them (ascending); undoExpense needs it.
+  participants: [String!]!
   shares: [ExpenseShare!]! @derivedFrom(field: "expense")
+  # Set by ExpenseUndone. An undone expense stays in the history but no longer counts in
+  # balances, the group's expenseCount/totalExpenseAmount, or members' running totals.
+  undone: Boolean!
+  undoneBy: String
+  undoneAtBlock: Int
+  undoneAtTimestamp: Int
+  undoneTxHash: String
   blockNumber: Int!
   blockTimestamp: Int!
   txHash: String!

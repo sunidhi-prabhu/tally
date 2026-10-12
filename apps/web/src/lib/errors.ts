@@ -11,6 +11,10 @@ const MESSAGES: Record<string, string> = {
   GroupNotFound: "That group does not exist.",
   NotGroupAdmin: "Only the group admin can do that.",
   NotMember: "That address is not a member of this group.",
+  ExpenseNotActive: "That expense was already undone.",
+  ExpenseDetailsMismatch:
+    "The expense details don't match what was recorded. Refresh and try again.",
+  NotAllowedToUndo: "Only the person who paid or the group admin can undo it.",
   AlreadyMember: "That address is already a member.",
   ZeroAddress: "Enter a valid address.",
   InvalidMember: "That address cannot be a member.",

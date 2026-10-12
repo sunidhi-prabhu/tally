@@ -76,9 +76,14 @@ export interface Settlement extends SettlementInput {
   readonly kind: SettlementKind;
 }
 
-/** A group's history, applied in array order (oldest first). */
+/**
+ * A group's history, applied in array order (oldest first).
+ * `expenseUndone` reverses an earlier expense (TallyLedger `undoExpense`); it carries the
+ * expense exactly as it was recorded.
+ */
 export type LedgerEntry =
   | { readonly kind: "expense"; readonly expense: Expense }
+  | { readonly kind: "expenseUndone"; readonly expense: Expense }
   | { readonly kind: "settlement"; readonly settlement: Settlement };
 
 /** Positive `net`: the member is owed money. Negative: the member owes money. */

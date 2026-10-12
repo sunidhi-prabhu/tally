@@ -40,15 +40,16 @@ token on Monad testnet is Agora AUSD, `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322d
 ([Agora deployments](https://docs.agora.finance/developer/contract-deployments); on-chain: symbol
 `AUSD`, 6 decimals, EIP-1967 upgradeable proxy). Re-verify before deploying.
 
-| Action                       | Who                     | Key rules                                                        |
-| ---------------------------- | ----------------------- | ---------------------------------------------------------------- |
-| `createGroup`                | Anyone                  | Caller becomes admin and first member; ≤ 100 members             |
-| `addMember` / `removeMember` | Group admin             | Removal only at a zero balance; the admin cannot be removed      |
-| `leaveGroup`                 | Any member except admin | Only at a zero balance                                           |
-| `recordEqualExpense`         | A member, as the payer  | Participants: current members, sorted ascending, no duplicates   |
-| `recordCustomExpense`        | A member, as the payer  | Shares parallel to participants and summing to `amount` exactly  |
-| `settleWithToken`            | The debtor (`from`)     | Caller owes, `to` is owed, amount ≤ `maxSettleable`; pays now    |
-| `acknowledgeSettlement`      | The creditor (`to`)     | `from` owes, caller is owed, amount ≤ `maxSettleable`; no tokens |
+| Action                       | Who                     | Key rules                                                                |
+| ---------------------------- | ----------------------- | ------------------------------------------------------------------------ |
+| `createGroup`                | Anyone                  | Caller becomes admin and first member; ≤ 100 members                     |
+| `addMember` / `removeMember` | Group admin             | Removal only at a zero balance; the admin cannot be removed              |
+| `leaveGroup`                 | Any member except admin | Only at a zero balance                                                   |
+| `recordEqualExpense`         | A member, as the payer  | Participants: current members, sorted ascending, no duplicates           |
+| `recordCustomExpense`        | A member, as the payer  | Shares parallel to participants and summing to `amount` exactly          |
+| `settleWithToken`            | The debtor (`from`)     | Caller owes, `to` is owed, amount ≤ `maxSettleable`; pays now            |
+| `undoExpense`                | The payer or the admin  | Details match `expenseHash`; still active; everyone involved is a member |
+| `acknowledgeSettlement`      | The creditor (`to`)     | `from` owes, caller is owed, amount ≤ `maxSettleable`; no tokens         |
 
 - Amounts per expense or settlement: `1 ..= MAX_AMOUNT` (1e18 = 1 trillion AUSD), same as core.
   Balances can grow beyond that; such debts are settled in several parts.
@@ -56,6 +57,10 @@ token on Monad testnet is Agora AUSD, `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322d
   addresses (participants are passed in ascending order). Matches `splitEqual` in core for
   lowercase addresses.
 - Expense and settlement IDs are caller-chosen non-zero `bytes32`, unique per group.
+- **Undo, not edit.** `undoExpense` applies the exact opposite balance changes and marks the
+  expense `Undone`; it stays in the history and its ID can't be reused. Only a 32-byte hash of
+  each expense is stored (`expenseHash`), so the caller passes the details from
+  `ExpenseRecorded` and the contract checks them. "Editing" is undo plus a new, corrected expense.
 - Events (`GroupCreated`, `MemberAdded`, `MemberRemoved`, `ExpenseRecorded` with participants and
   shares, `SettlementRecorded` with its kind) are enough to rebuild membership, expenses and
   balances. `TokenSettled` adds the token address for actual payments.

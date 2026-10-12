@@ -148,6 +148,30 @@ export const tallyLedgerAbi = [
   },
   {
     "type": "function",
+    "name": "expenseHash",
+    "inputs": [
+      {
+        "name": "groupId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expenseId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "expenseRecorded",
     "inputs": [
       {
@@ -166,6 +190,30 @@ export const tallyLedgerAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "expenseStatus",
+    "inputs": [
+      {
+        "name": "groupId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expenseId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum TallyLedger.ExpenseStatus"
       }
     ],
     "stateMutability": "view"
@@ -514,6 +562,44 @@ export const tallyLedgerAbi = [
     "stateMutability": "view"
   },
   {
+    "type": "function",
+    "name": "undoExpense",
+    "inputs": [
+      {
+        "name": "groupId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expenseId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "participants",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "shares",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "event",
     "name": "ExpenseRecorded",
     "inputs": [
@@ -564,6 +650,31 @@ export const tallyLedgerAbi = [
         "type": "string",
         "indexed": false,
         "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ExpenseUndone",
+    "inputs": [
+      {
+        "name": "groupId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "expenseId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "undoneBy",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -812,6 +923,28 @@ export const tallyLedgerAbi = [
   },
   {
     "type": "error",
+    "name": "ExpenseDetailsMismatch",
+    "inputs": [
+      {
+        "name": "expenseId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ExpenseNotActive",
+    "inputs": [
+      {
+        "name": "expenseId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "GroupNotFound",
     "inputs": [
       {
@@ -857,6 +990,22 @@ export const tallyLedgerAbi = [
     "type": "error",
     "name": "LengthMismatch",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAllowedToUndo",
+    "inputs": [
+      {
+        "name": "groupId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   },
   {
     "type": "error",

@@ -93,6 +93,16 @@ const expenseRecorded = (
       description: label,
     },
   }) as SimItem;
+const expenseUndone = (
+  groupId: bigint,
+  label: string,
+  undoneBy: Address,
+): SimItem =>
+  ({
+    contract: "TallyLedger",
+    event: "ExpenseUndone",
+    params: { groupId, expenseId: id32(label), undoneBy },
+  }) as SimItem;
 const settlementRecorded = (
   groupId: bigint,
   label: string,
@@ -172,24 +182,33 @@ async function reconstruct(
   const settlements = (await indexer.Settlement.getAll()).filter(
     (s) => s.group_id === gid,
   );
+  const undos = (await indexer.GroupActivity.getAll()).filter(
+    (a) => a.group_id === gid && a.activityType === "EXPENSE_UNDONE",
+  );
+  const coreExpense = (e: (typeof expenses)[number]) => ({
+    id: e.id,
+    groupId: gid,
+    payer: e.payer,
+    amount: e.amount,
+    description: e.description,
+    shares: shares
+      .filter((s) => s.expense_id === e.id)
+      .sort((a, b) => a.position - b.position)
+      .map((s) => ({ member: s.member, amount: s.amount })),
+  });
 
   const ordered: { block: number; log: number; entry: LedgerEntry }[] = [
     ...expenses.map((e) => ({
       block: e.blockNumber,
       log: e.logIndex,
+      entry: { kind: "expense" as const, expense: coreExpense(e) },
+    })),
+    ...undos.map((a) => ({
+      block: a.blockNumber,
+      log: a.logIndex,
       entry: {
-        kind: "expense" as const,
-        expense: {
-          id: e.id,
-          groupId: gid,
-          payer: e.payer,
-          amount: e.amount,
-          description: e.description,
-          shares: shares
-            .filter((s) => s.expense_id === e.id)
-            .sort((a, b) => a.position - b.position)
-            .map((s) => ({ member: s.member, amount: s.amount })),
-        },
+        kind: "expenseUndone" as const,
+        expense: coreExpense(expenses.find((e) => e.id === a.expense_id)!),
       },
     })),
     ...settlements.map((s) => ({
@@ -598,5 +617,143 @@ describe("balance reconstruction with @tally/core", () => {
       [BOB]: 500n * AUSD,
       [CAROL]: -500n * AUSD,
     });
+  });
+});
+
+describe("undoing expenses", () => {
+  const dinner = (block: number) =>
+    at(
+      block,
+      0,
+      expenseRecorded(
+        1n,
+        "dinner",
+        ALICE,
+        10n * AUSD,
+        0n,
+        [BOB, ALICE, CAROL],
+        [3_333_334n, 3_333_333n, 3_333_333n],
+      ),
+    );
+
+  it("reverses balances and running totals, and keeps the expense marked undone", async () => {
+    const indexer = await run([
+      ...createTrip(),
+      dinner(2),
+      at(3, 0, expenseUndone(1n, "dinner", ALICE)),
+    ]);
+
+    expect(await nets(indexer, 1n)).toEqual({
+      [ALICE]: 0n,
+      [BOB]: 0n,
+      [CAROL]: 0n,
+      [DAVE]: 0n,
+    });
+    const alice = await indexer.Membership.getOrThrow(`1-${ALICE}`);
+    expect(alice).toMatchObject({ totalPaid: 0n, totalOwedShares: 0n });
+
+    const expense = await indexer.Expense.getOrThrow(`1-${id32("dinner")}`);
+    expect(expense).toMatchObject({
+      undone: true,
+      undoneBy: ALICE,
+      undoneAtBlock: 3,
+      undoneTxHash: tx(3),
+      participants: [BOB, ALICE, CAROL],
+    });
+    expect(await indexer.Group.getOrThrow("1")).toMatchObject({
+      expenseCount: 0,
+      totalExpenseAmount: 0n,
+    });
+    const undo = (await indexer.GroupActivity.getAll()).find(
+      (a) => a.activityType === "EXPENSE_UNDONE",
+    );
+    expect(undo).toMatchObject({
+      actor: ALICE,
+      expense_id: `1-${id32("dinner")}`,
+      amount: 10n * AUSD,
+    });
+  });
+
+  it("after a token settlement, the payer owes the money back", async () => {
+    const indexer = await run([
+      ...createTrip(),
+      at(
+        2,
+        0,
+        expenseRecorded(
+          1n,
+          "lunch",
+          ALICE,
+          30n * AUSD,
+          0n,
+          [BOB, ALICE],
+          [15n * AUSD, 15n * AUSD],
+        ),
+      ),
+      at(3, 0, settlementRecorded(1n, "s1", BOB, ALICE, 15n * AUSD, 2n)),
+      at(3, 1, tokenSettled(1n, "s1", BOB, ALICE, 15n * AUSD)),
+      at(4, 0, expenseUndone(1n, "lunch", ALICE)),
+    ]);
+    const balances = await nets(indexer, 1n);
+    expect(balances[ALICE]).toBe(-15n * AUSD);
+    expect(balances[BOB]).toBe(15n * AUSD);
+    expect(balances).toEqual(await reconstruct(indexer, 1n));
+  });
+
+  it("applies a re-delivered ExpenseUndone once", async () => {
+    const undo = expenseUndone(1n, "dinner", ALICE);
+    const indexer = await run([
+      ...createTrip(),
+      dinner(2),
+      at(3, 0, undo),
+      // The same undo seen again at a later position (e.g. replayed by a faulty source).
+      at(4, 0, undo),
+    ]);
+    expect((await nets(indexer, 1n))[ALICE]).toBe(0n);
+    expect(
+      (await indexer.GroupActivity.getAll()).filter(
+        (a) => a.activityType === "EXPENSE_UNDONE",
+      ),
+    ).toHaveLength(1);
+    expect(await indexer.Group.getOrThrow("1")).toMatchObject({
+      expenseCount: 0,
+      totalExpenseAmount: 0n,
+    });
+  });
+
+  it("ignores an undo for an expense that was never indexed", async () => {
+    const indexer = await run([
+      ...createTrip(),
+      at(2, 0, expenseUndone(1n, "missing", ALICE)),
+    ]);
+    expect((await nets(indexer, 1n))[ALICE]).toBe(0n);
+    expect(await indexer.Group.getOrThrow("1")).toMatchObject({
+      expenseCount: 0,
+    });
+  });
+
+  it("incremental balances equal core.computeBalances with undos in the history", async () => {
+    const indexer = await run([
+      ...createTrip(),
+      dinner(2),
+      at(
+        3,
+        0,
+        expenseRecorded(
+          1n,
+          "taxi",
+          CAROL,
+          6n * AUSD,
+          1n,
+          [DAVE, CAROL],
+          [4n * AUSD, 2n * AUSD],
+        ),
+      ),
+      at(4, 0, settlementRecorded(1n, "s1", DAVE, CAROL, 500_000n, 1n)),
+      at(5, 0, expenseUndone(1n, "taxi", ALICE)), // undone by the admin
+    ]);
+    expect(await nets(indexer, 1n)).toEqual(await reconstruct(indexer, 1n));
+    // DAVE owed 4, paid 0.5, then the taxi was undone: CAROL owes him 0.5 back.
+    expect((await nets(indexer, 1n))[DAVE]).toBe(500_000n);
   });
 });

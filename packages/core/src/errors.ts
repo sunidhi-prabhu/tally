@@ -32,7 +32,11 @@ export type TallyErrorCode =
   /** Net balances do not sum to zero. */
   | "UNBALANCED"
   /** Settlement kind is not "acknowledged" or "token". */
-  | "INVALID_SETTLEMENT_KIND";
+  | "INVALID_SETTLEMENT_KIND"
+  /** An undo references an expense that was never recorded, or was already undone. */
+  | "EXPENSE_NOT_ACTIVE"
+  /** An undo's expense details differ from the expense as recorded. */
+  | "EXPENSE_MISMATCH";
 
 /** The only error type thrown by @tally/core for invalid input. */
 export class TallyError extends Error {

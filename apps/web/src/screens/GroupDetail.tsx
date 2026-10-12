@@ -17,6 +17,7 @@ import { DataState } from "@/components/DataState";
 import { WriteGate } from "@/components/WriteGate";
 import { BalanceBreakdown } from "@/components/BalanceBreakdown";
 import { ExpenseList } from "@/components/ExpenseList";
+import type { UndoContext } from "@/components/UndoExpense";
 import { SettlementList } from "@/components/SettlementList";
 import { useDemoNames } from "@/components/AppShell";
 import {
@@ -188,7 +189,19 @@ export function GroupDetail({ groupId }: { groupId: string }) {
                 />
               )}
               {tab === "expenses" && (
-                <Expenses groupId={g.id} me={me} names={names} />
+                <Expenses
+                  groupId={g.id}
+                  me={me}
+                  names={names}
+                  undo={{
+                    groupId: g.id,
+                    admin: g.admin,
+                    activeMembers: new Set(
+                      g.members.filter((m) => m.active).map((m) => m.address),
+                    ),
+                    canAct,
+                  }}
+                />
               )}
               {tab === "settlements" && (
                 <Settlements groupId={g.id} me={me} names={names} />
@@ -236,10 +249,12 @@ function Expenses({
   groupId,
   me,
   names,
+  undo,
 }: {
   groupId: string;
   me?: string;
   names: Record<string, string>;
+  undo: UndoContext;
 }) {
   const [limit, setLimit] = useState(PAGE);
   const vars = useMemo(
@@ -254,7 +269,12 @@ function Expenses({
           <EmptyState title="No expenses yet" />
         ) : (
           <>
-            <ExpenseList items={items.slice(0, limit)} me={me} names={names} />
+            <ExpenseList
+              items={items.slice(0, limit)}
+              me={me}
+              names={names}
+              undo={undo}
+            />
             {items.length > limit && (
               <Button
                 variant="secondary"

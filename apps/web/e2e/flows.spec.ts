@@ -153,3 +153,59 @@ test("mark a payment as received: no tokens move", async ({ page }) => {
   await expect(panel.getByText("Marked as received").first()).toBeVisible();
   await expect(panel.getByText("Paid in AUSD").first()).toBeVisible();
 });
+
+test("undo an expense, then add a corrected version", async ({ page }) => {
+  await page.goto("/");
+  await actAs(page, 0);
+  await page.goto("/groups/1");
+  const myCard = page.getByRole("region", {
+    name: "Your balance in this group",
+  });
+  const balance = myCard.locator("p").first();
+  await expect(balance).toHaveText(/AUSD|\d/);
+  const before = await balance.textContent();
+
+  // Record an expense that changes the balance.
+  await myCard.getByRole("link", { name: "Add expense", exact: true }).click();
+  await page.getByLabel("Description").fill("E2E typo");
+  await page.getByLabel("Amount", { exact: true }).fill("12");
+  await page.getByRole("button", { name: "Review expense" }).click();
+  await page
+    .getByRole("dialog", { name: "Add this expense?" })
+    .getByRole("button", { name: "Add expense" })
+    .click();
+  await expect(page.getByText("Balances are updated.")).toBeVisible();
+  await page.getByRole("link", { name: "Back to group", exact: true }).click();
+  await expect(balance).not.toHaveText(before!);
+
+  // Undo it from the Expenses tab.
+  await page.getByRole("tab", { name: "Expenses" }).click();
+  const item = page.getByRole("listitem").filter({ hasText: "E2E typo" });
+  await item.getByText("E2E typo").click();
+  await item.getByRole("button", { name: "Undo expense" }).click();
+  await page
+    .getByRole("dialog", { name: "Undo this expense?" })
+    .getByRole("button", { name: "Undo expense" })
+    .click();
+  await expect(item.getByText("Undone").first()).toBeVisible({
+    timeout: 30_000,
+  });
+  // Balances are exactly as before the expense.
+  await expect(balance).toHaveText(before!);
+
+  // "Edit": add a corrected copy, prefilled from the undone one.
+  await item.getByRole("link", { name: "Add corrected version" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Add corrected expense" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Description")).toHaveValue("E2E typo");
+  await expect(page.getByLabel("Amount", { exact: true })).toHaveValue("12");
+  await page.getByLabel("Description").fill("E2E fixed");
+  await page.getByLabel("Amount", { exact: true }).fill("2");
+  await page.getByRole("button", { name: "Review expense" }).click();
+  await page
+    .getByRole("dialog", { name: "Add this expense?" })
+    .getByRole("button", { name: "Add expense" })
+    .click();
+  await expect(page.getByText("Balances are updated.")).toBeVisible();
+});

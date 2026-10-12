@@ -366,3 +366,93 @@ describe("ledgerEntryDeltas", () => {
     });
   });
 });
+
+describe("undoing an expense", () => {
+  const undo = (entry: LedgerEntry): LedgerEntry => {
+    if (entry.kind !== "expense") throw new Error("not an expense");
+    return { kind: "expenseUndone", expense: entry.expense };
+  };
+  // 10 AUSD / 3 leaves a remainder, so the shares are uneven.
+  const dinner = equalExpense(group, "e1", "alice", ausd("10"), [
+    "alice",
+    "bob",
+    "carol",
+  ]);
+  const taxi = equalExpense(group, "e2", "bob", ausd("6"), ["alice", "bob"]);
+
+  it("reverses the expense exactly, leaving other entries in place", () => {
+    const withoutDinner = computeBalances(group, [taxi]);
+    const balances = computeBalances(group, [dinner, taxi, undo(dinner)]);
+    expect(balances).toEqual(withoutDinner);
+    expect(sum(balances)).toBe(0n);
+  });
+
+  it("deltas are the exact negation of the expense's", () => {
+    const forward = ledgerEntryDeltas(dinner);
+    const backward = ledgerEntryDeltas(undo(dinner));
+    expect(backward).toEqual(
+      forward.map(({ member, delta }) => ({ member, delta: -delta })),
+    );
+  });
+
+  it("after a settlement, whoever paid is owed it back", () => {
+    const lunch = equalExpense(group, "e1", "alice", ausd("30"), [
+      "alice",
+      "bob",
+    ]);
+    const balances = computeBalances(group, [
+      lunch,
+      settlement(group, "s1", "bob", "alice", ausd("15"), "token"),
+      undo(lunch),
+    ]);
+    expect(netMap(balances)).toEqual({
+      alice: -ausd("15"),
+      bob: ausd("15"),
+      carol: 0n,
+    });
+  });
+
+  it("rejects undoing an unknown expense", () => {
+    expectTallyError(
+      () => computeBalances(group, [undo(dinner)]),
+      "EXPENSE_NOT_ACTIVE",
+    );
+  });
+
+  it("rejects undoing the same expense twice", () => {
+    expectTallyError(
+      () => computeBalances(group, [dinner, undo(dinner), undo(dinner)]),
+      "EXPENSE_NOT_ACTIVE",
+    );
+  });
+
+  it("rejects undo details that differ from the recorded expense", () => {
+    if (dinner.kind !== "expense") throw new Error("not an expense");
+    const altered: LedgerEntry = {
+      kind: "expenseUndone",
+      expense: { ...dinner.expense, amount: ausd("11") },
+    };
+    expectTallyError(
+      () => computeBalances(group, [dinner, altered]),
+      "EXPENSE_MISMATCH",
+    );
+    const reordered: LedgerEntry = {
+      kind: "expenseUndone",
+      expense: {
+        ...dinner.expense,
+        shares: [...dinner.expense.shares].reverse(),
+      },
+    };
+    expectTallyError(
+      () => computeBalances(group, [dinner, reordered]),
+      "EXPENSE_MISMATCH",
+    );
+  });
+
+  it("keeps an undone expense's ID used", () => {
+    expectTallyError(
+      () => computeBalances(group, [dinner, undo(dinner), dinner]),
+      "DUPLICATE_ENTRY",
+    );
+  });
+});

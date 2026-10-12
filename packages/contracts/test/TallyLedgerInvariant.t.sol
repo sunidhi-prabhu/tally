@@ -20,6 +20,20 @@ contract LedgerHandler is Test {
     uint256 public refusedRemovals;
     uint256 public reAdds;
     uint256 public tokenSettlements;
+    uint256 public undos;
+    uint256 public refusedUndos;
+
+    /// Every recorded expense, so the fuzzer can undo one later.
+    struct Recorded {
+        bytes32 id;
+        address payer;
+        uint256 amount;
+        address[] participants;
+        uint256[] shares;
+        bool undone;
+    }
+
+    Recorded[] internal recorded;
     /// Model of each actor's token balance: minted - paid + received.
     mapping(address => uint256) public expectedTokens;
     uint256 public totalMinted;
@@ -76,10 +90,12 @@ contract LedgerHandler is Test {
         // Model: payer +amount; leftover units one each in list order (ascending addresses).
         expectedNet[payer] += int256(amount);
         uint256 count = participants.length;
+        uint256[] memory shares = new uint256[](count);
         for (uint256 i = 0; i < count; ++i) {
-            uint256 share = amount / count + (i < amount % count ? 1 : 0);
-            expectedNet[participants[i]] -= int256(share);
+            shares[i] = amount / count + (i < amount % count ? 1 : 0);
+            expectedNet[participants[i]] -= int256(shares[i]);
         }
+        recorded.push(Recorded(bytes32(nonce), payer, amount, participants, shares, false));
         ++operations;
     }
 
@@ -104,6 +120,38 @@ contract LedgerHandler is Test {
         for (uint256 i = 0; i < participants.length; ++i) {
             expectedNet[participants[i]] -= int256(shares[i]);
         }
+        recorded.push(Recorded(bytes32(nonce), payer, amount, participants, shares, false));
+        ++operations;
+    }
+
+    /// Undoes a recorded expense as its payer or as the admin (actors[0]). Refused, with no
+    /// effect, while anyone involved has left the group.
+    function undo(uint256 seed, bool asAdmin) external {
+        if (recorded.length == 0) return;
+        Recorded storage e = recorded[seed % recorded.length];
+        if (e.undone) return;
+        address caller = asAdmin ? actors[0] : e.payer;
+
+        bool allMembers = ledger.isMember(groupId, e.payer);
+        for (uint256 i = 0; i < e.participants.length; ++i) {
+            allMembers = allMembers && ledger.isMember(groupId, e.participants[i]);
+        }
+        if (!allMembers) {
+            vm.prank(caller);
+            vm.expectRevert();
+            ledger.undoExpense(groupId, e.id, e.payer, e.amount, e.participants, e.shares);
+            ++refusedUndos;
+            return;
+        }
+
+        vm.prank(caller);
+        ledger.undoExpense(groupId, e.id, e.payer, e.amount, e.participants, e.shares);
+        e.undone = true;
+        expectedNet[e.payer] -= int256(e.amount);
+        for (uint256 i = 0; i < e.participants.length; ++i) {
+            expectedNet[e.participants[i]] += int256(e.shares[i]);
+        }
+        ++undos;
         ++operations;
     }
 
@@ -286,6 +334,8 @@ contract TallyLedgerInvariantTest is Test {
         console.log("refused removals", handler.refusedRemovals());
         console.log("re-adds", handler.reAdds());
         console.log("token settlements", handler.tokenSettlements());
+        console.log("undos", handler.undos());
+        console.log("refused undos", handler.refusedUndos());
     }
 
     function invariant_balancesSumToZero() public view {

@@ -254,6 +254,12 @@ indexer.onEvent(
       splitType,
       description: params.description,
       participantCount: expense.shares.length,
+      participants: expense.shares.map((s) => s.member),
+      undone: false,
+      undoneBy: undefined,
+      undoneAtBlock: undefined,
+      undoneAtTimestamp: undefined,
+      undoneTxHash: undefined,
       ...position,
     });
     expense.shares.forEach((share, position_) => {
@@ -311,6 +317,99 @@ indexer.onEvent(
         {
           activityType: "EXPENSE_RECORDED",
           actor: expense.payer,
+          member: undefined,
+          expense_id: id,
+          settlement_id: undefined,
+          amount: expense.amount,
+        },
+      ),
+    );
+  },
+);
+
+// Reverses an expense's balance changes with core's rule for "expenseUndone": the exact negation
+// of the indexed expense. The contract only allows this while everyone involved is a member and
+// the details match what was recorded, so the indexed expense is the one being undone.
+indexer.onEvent(
+  { contract: "TallyLedger", event: "ExpenseUndone" },
+  async ({ event, context }) => {
+    const position = positionOf(event);
+    if (await alreadyIndexed(context, position)) return;
+    const { groupId, expenseId, undoneBy } = event.params;
+    const id = expenseKey(groupId, expenseId);
+    const stored = await context.Expense.get(id);
+    if (!stored) {
+      context.log.error(`ExpenseUndone for unknown expense ${id}; ignored.`);
+      return;
+    }
+    if (stored.undone) return; // re-delivery
+
+    const group = await loadGroup(context, groupId);
+    const shares = [];
+    for (const member of stored.participants) {
+      const share = await context.ExpenseShare.getOrThrow(
+        `${id}-${member}`,
+        `Share of ${member} in expense ${id} is not indexed.`,
+      );
+      shares.push({ member, amount: share.amount });
+    }
+    const expense = {
+      id,
+      groupId: group.id,
+      payer: stored.payer,
+      amount: stored.amount,
+      description: stored.description,
+      shares,
+    };
+
+    const affected = new Map<string, Membership>();
+    for (const address of [expense.payer, ...stored.participants]) {
+      if (!affected.has(address)) {
+        affected.set(address, await loadMembership(context, groupId, address));
+      }
+    }
+    const update = (address: string, change: Partial<Membership>) => {
+      const current = affected.get(address);
+      if (current) affected.set(address, { ...current, ...change });
+    };
+    for (const { member, delta } of deltasFor({
+      kind: "expenseUndone",
+      expense,
+    })) {
+      update(member, { netBalance: affected.get(member)!.netBalance + delta });
+    }
+    update(expense.payer, {
+      totalPaid: affected.get(expense.payer)!.totalPaid - expense.amount,
+    });
+    for (const share of shares) {
+      update(share.member, {
+        totalOwedShares:
+          affected.get(share.member)!.totalOwedShares - share.amount,
+      });
+    }
+    for (const membership of affected.values())
+      context.Membership.set(membership);
+
+    context.Expense.set({
+      ...stored,
+      undone: true,
+      undoneBy,
+      undoneAtBlock: position.blockNumber,
+      undoneAtTimestamp: position.blockTimestamp,
+      undoneTxHash: position.txHash,
+    });
+    context.Group.set(
+      addActivity(
+        context,
+        {
+          ...group,
+          expenseCount: group.expenseCount - 1,
+          totalExpenseAmount: group.totalExpenseAmount - expense.amount,
+        },
+        position,
+        {
+          activityType: "EXPENSE_UNDONE",
+          actor: undoneBy,
           member: undefined,
           expense_id: id,
           settlement_id: undefined,

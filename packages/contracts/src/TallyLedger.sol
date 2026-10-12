@@ -30,6 +30,9 @@ interface IERC20Like {
 ///   so membership changes never alter balances or orphan debts.
 /// - Only a member can record an expense, and only as its payer (`msg.sender`). Participants
 ///   must be current members. Members trust each other not to record false expenses.
+/// - An expense can be undone once, by its payer or the group admin. Undoing applies the exact
+///   opposite balance changes; the expense stays in the history, marked undone. Its payer and
+///   participants must still be members, so an undo never leaves a debt on a former member.
 /// - Only the creditor can acknowledge a settlement, which can only reduce their own credit.
 /// - Only the debtor can pay with tokens, and only from their own balance (`msg.sender`). The
 ///   ledger never pulls tokens from anyone other than the caller.
@@ -53,6 +56,15 @@ contract TallyLedger {
     enum SplitType {
         Equal,
         Custom
+    }
+
+    enum ExpenseStatus {
+        /// No expense with this ID.
+        None,
+        /// Recorded and counted in balances.
+        Active,
+        /// Recorded, then undone: its balance changes were reversed.
+        Undone
     }
 
     enum SettlementKind {
@@ -80,7 +92,11 @@ contract TallyLedger {
     /// @dev 1-based index into `_members`; 0 means not a member.
     mapping(uint256 groupId => mapping(address member => uint256)) private _memberIndex;
     mapping(uint256 groupId => mapping(address member => int256)) private _net;
-    mapping(uint256 groupId => mapping(bytes32 expenseId => bool)) public expenseRecorded;
+    mapping(uint256 groupId => mapping(bytes32 expenseId => ExpenseStatus)) public expenseStatus;
+    /// @notice keccak256(abi.encode(payer, amount, participants, shares)) of each recorded
+    /// expense. `undoExpense` takes those details back and must match it exactly, so only the
+    /// original balance changes can be reversed, without storing every share on-chain.
+    mapping(uint256 groupId => mapping(bytes32 expenseId => bytes32)) public expenseHash;
     /// @notice How a settlement ID was used. IDs are shared across both kinds.
     mapping(uint256 groupId => mapping(bytes32 settlementId => SettlementKind)) public
         settlementKind;
@@ -98,6 +114,11 @@ contract TallyLedger {
         address[] participants,
         uint256[] shares,
         string description
+    );
+    /// @notice The expense's balance changes were reversed. Its details are in its
+    /// `ExpenseRecorded` event.
+    event ExpenseUndone(
+        uint256 indexed groupId, bytes32 indexed expenseId, address indexed undoneBy
     );
     event SettlementRecorded(
         uint256 indexed groupId,
@@ -138,6 +159,9 @@ contract TallyLedger {
     error ShareTotalMismatch(uint256 expected, uint256 actual);
     error DuplicateExpenseId(bytes32 expenseId);
     error DuplicateSettlementId(bytes32 settlementId);
+    error ExpenseNotActive(bytes32 expenseId);
+    error ExpenseDetailsMismatch(bytes32 expenseId);
+    error NotAllowedToUndo(uint256 groupId, address account);
     error SelfSettlement();
     error SettlementExceedsDebt(uint256 requested, uint256 max);
     error InvalidToken(address token);
@@ -265,6 +289,49 @@ contract TallyLedger {
         );
     }
 
+    /// @notice Undoes an active expense: the payer's credit and every participant's share are
+    /// reversed exactly, and the expense is marked `Undone` (it cannot be undone twice or
+    /// re-recorded under the same ID). Only the payer or the group admin may call this.
+    /// Pass the expense's details exactly as emitted in `ExpenseRecorded`; they must match
+    /// `expenseHash`. The payer and every participant must still be members.
+    /// Undoing after settlements is allowed: balances then reflect that money changed hands
+    /// for an expense that no longer counts, so whoever was paid may now owe it back.
+    function undoExpense(
+        uint256 groupId,
+        bytes32 expenseId,
+        address payer,
+        uint256 amount,
+        address[] calldata participants,
+        uint256[] calldata shares
+    ) external nonReentrant {
+        _requireGroup(groupId);
+        if (expenseStatus[groupId][expenseId] != ExpenseStatus.Active) {
+            revert ExpenseNotActive(expenseId);
+        }
+        if (
+            keccak256(abi.encode(payer, amount, participants, shares))
+                != expenseHash[groupId][expenseId]
+        ) {
+            revert ExpenseDetailsMismatch(expenseId);
+        }
+        if (msg.sender != payer && msg.sender != _groups[groupId].admin) {
+            revert NotAllowedToUndo(groupId, msg.sender);
+        }
+        if (!isMember(groupId, payer)) revert NotMember(groupId, payer);
+        for (uint256 i = 0; i < participants.length; ++i) {
+            if (!isMember(groupId, participants[i])) revert NotMember(groupId, participants[i]);
+        }
+
+        expenseStatus[groupId][expenseId] = ExpenseStatus.Undone;
+        // The exact opposite of `_applyExpense`. The hash matched, so these are the amounts
+        // that were applied, each <= MAX_AMOUNT.
+        _net[groupId][payer] -= _toInt(amount);
+        for (uint256 i = 0; i < participants.length; ++i) {
+            _net[groupId][participants[i]] += _toInt(shares[i]);
+        }
+        emit ExpenseUndone(groupId, expenseId, msg.sender);
+    }
+
     // ---------------------------------------------------------------- settlements
 
     /// @notice Pays `to` in `settlementToken` and records the settlement, atomically.
@@ -327,6 +394,11 @@ contract TallyLedger {
         // forge-lint: disable-next-line(unsafe-typecast) toNet > 0
         uint256 credit = uint256(toNet);
         return debt < credit ? debt : credit;
+    }
+
+    /// @notice True if the ID was used for an expense, whether still active or undone.
+    function expenseRecorded(uint256 groupId, bytes32 expenseId) external view returns (bool) {
+        return expenseStatus[groupId][expenseId] != ExpenseStatus.None;
     }
 
     /// @notice True if the ID was used by either settlement kind.
@@ -480,7 +552,9 @@ contract TallyLedger {
     ) private view {
         _requireMember(groupId, msg.sender);
         if (expenseId == bytes32(0)) revert InvalidId();
-        if (expenseRecorded[groupId][expenseId]) revert DuplicateExpenseId(expenseId);
+        if (expenseStatus[groupId][expenseId] != ExpenseStatus.None) {
+            revert DuplicateExpenseId(expenseId);
+        }
         _requireValidAmount(amount);
         if (bytes(description).length > MAX_DESCRIPTION_BYTES) revert DescriptionTooLong();
 
@@ -507,7 +581,9 @@ contract TallyLedger {
         uint256[] memory shares,
         string calldata description
     ) private {
-        expenseRecorded[groupId][expenseId] = true;
+        expenseStatus[groupId][expenseId] = ExpenseStatus.Active;
+        expenseHash[groupId][expenseId] =
+            keccak256(abi.encode(msg.sender, amount, participants, shares));
         // The payer is credited in full and debited their own share like everyone else, so a
         // participating payer nets `amount - ownShare` and never owes themselves.
         _net[groupId][msg.sender] += _toInt(amount);

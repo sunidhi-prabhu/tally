@@ -51,6 +51,7 @@ All amounts are AUSD base units (6 decimals); all addresses are lowercase
 | `MemberAdded`        | New or reactivated `Membership`, `Account`                                                        |
 | `MemberRemoved`      | `Membership.active = false` (balance is always 0 on-chain at removal)                             |
 | `ExpenseRecorded`    | `Expense` + `ExpenseShare`s; balances via core's `ledgerEntryDeltas`                              |
+| `ExpenseUndone`      | `Expense.undone = true`; exact reversal via core's `expenseUndone` entry; counts and totals drop  |
 | `SettlementRecorded` | `Settlement`; balances via `ledgerEntryDeltas`. **The only place a settlement changes balances.** |
 | `TokenSettled`       | Confirms a `TOKEN_TRANSFER` settlement and records the token. Never changes balances.             |
 
