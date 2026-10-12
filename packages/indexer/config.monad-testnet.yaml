@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=./node_modules/envio/evm.schema.json
 #
 # Monad testnet (chain 10143). Defaults are the verified deployment recorded in
-# packages/contracts/deployments/monad-testnet.json (v2 with undoExpense: tx 0xe34b0e77…aaff, block 70332804);
+# packages/contracts/deployments/monad-testnet.json (v3: invites + TallyAccount; tx 0x6cc3ed28…0d1c, block 70456806);
 # ENVIO_TALLY_LEDGER_ADDRESS / ENVIO_TALLY_LEDGER_START_BLOCK override them. Envio Cloud uses the
 # defaults, so no dashboard variables are needed. Locally, data comes from HyperSync, which
 # requires ENVIO_API_TOKEN.
@@ -29,7 +29,7 @@ contracts:
       - event: TokenSettled
 chains:
   - id: 10143
-    start_block: ${ENVIO_TALLY_LEDGER_START_BLOCK:-70332804}
+    start_block: ${ENVIO_TALLY_LEDGER_START_BLOCK:-70456806}
     contracts:
       - name: TallyLedger
-        address: "${ENVIO_TALLY_LEDGER_ADDRESS:-0xa9a2f30bd504b766d0add0bb95e184689d43d1d0}"
+        address: "${ENVIO_TALLY_LEDGER_ADDRESS:-0x356872f3f74f8ab200aec5773d8d5ba0022b443b}"

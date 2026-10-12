@@ -3,7 +3,7 @@
   "chainId": 10143,
   "status": "deployed",
   "contract": "TallyLedger",
-  "address": "0xa9a2f30bd504b766d0add0bb95e184689d43d1d0",
+  "address": "0x356872f3f74f8ab200aec5773d8d5ba0022b443b",
   "deployer": "0xf268e7e91fcc13d36619d1806849c21760b654b7",
   "settlementToken": {
     "address": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC",
@@ -11,9 +11,9 @@
     "decimals": 6
   },
   "constructorArgs": ["0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC"],
-  "deploymentTxHash": "0xe34b0e771216cec9aae3ccb78aba151b2de7c62948738d880ab39bb66dccaaff",
-  "deploymentBlock": 70332804,
-  "gasUsed": 4658362,
+  "deploymentTxHash": "0x6cc3ed287f1688aee92194fbc9b7e734ec8fdaca83385b6965012ce6c18b0d1c",
+  "deploymentBlock": 70456806,
+  "gasUsed": 5176216,
   "compiler": {
     "version": "0.8.37+commit.f401782d",
     "evmVersion": "osaka",
@@ -23,6 +23,15 @@
     "hardfork": "monad:MonadNine"
   },
   "runtimeBytecodeMatchesBuild": true,
-  "explorer": "https://testnet.monadscan.com/address/0xa9a2f30bd504b766d0add0bb95e184689d43d1d0",
-  "recordedAt": "2026-10-12T07:03:17.995Z"
+  "explorer": "https://testnet.monadscan.com/address/0x356872f3f74f8ab200aec5773d8d5ba0022b443b",
+  "recordedAt": "2026-10-12T17:27:20.592Z",
+  "account": {
+    "contract": "TallyAccount",
+    "address": "0x7a27827c840c116ddd556c64fdf169572a0ef02d",
+    "deploymentTxHash": "0xcdbae30680e5df05fa4db5935f2da9aba1c92918fb603d275c1d61fea7e85b2b",
+    "deploymentBlock": 70456811,
+    "gasUsed": 2098348,
+    "runtimeBytecodeMatchesBuild": true,
+    "explorer": "https://testnet.monadscan.com/address/0x7a27827c840c116ddd556c64fdf169572a0ef02d"
+  }
 }
