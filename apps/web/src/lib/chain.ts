@@ -36,7 +36,13 @@ export function createClients(config: AppConfig): {
   const chain = chainFor(config);
   return {
     chain,
-    publicClient: createPublicClient({ chain, transport: http(config.rpcUrl) }),
+    // Monad makes a block about every 0.4 s; viem's default 4 s receipt polling would make
+    // every confirmation look several seconds slower than it is.
+    publicClient: createPublicClient({
+      chain,
+      transport: http(config.rpcUrl),
+      pollingInterval: 250,
+    }),
   };
 }
 

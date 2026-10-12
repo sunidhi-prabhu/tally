@@ -165,6 +165,56 @@ export function parseActivity(data: unknown): Activity[] {
 
 // ------------------------------------------------------------------ group detail
 
+/**
+ * Active expenses' shares and all settlements of a group, to count the separate payments that
+ * settling up would take without simplification (lib/balances pairwiseDebtCount).
+ */
+export const GROUP_DEBT_GRAPH = /* GraphQL */ `
+  query GroupDebtGraph($id: String!) {
+    Expense(
+      where: { group_id: { _eq: $id }, undone: { _eq: false } }
+      limit: 1000
+    ) {
+      payer
+      shares {
+        member
+        amount
+      }
+    }
+    Settlement(where: { group_id: { _eq: $id } }, limit: 1000) {
+      debtor
+      creditor
+      amount
+    }
+  }
+`;
+
+export interface DebtGraph {
+  expenses: { payer: string; shares: { member: string; amount: bigint }[] }[];
+  settlements: { debtor: string; creditor: string; amount: bigint }[];
+}
+
+export function parseDebtGraph(data: unknown): DebtGraph {
+  const raw = data as {
+    Expense?: { payer: string; shares: { member: string; amount: string }[] }[];
+    Settlement?: { debtor: string; creditor: string; amount: string }[];
+  };
+  return {
+    expenses: (raw.Expense ?? []).map((e) => ({
+      payer: e.payer,
+      shares: e.shares.map((s) => ({
+        member: s.member,
+        amount: big(s.amount),
+      })),
+    })),
+    settlements: (raw.Settlement ?? []).map((s) => ({
+      debtor: s.debtor,
+      creditor: s.creditor,
+      amount: big(s.amount),
+    })),
+  };
+}
+
 export const GROUP_DETAIL = /* GraphQL */ `
   query GroupDetail($id: String!) {
     Group(where: { id: { _eq: $id } }) {

@@ -90,3 +90,30 @@ describe("resolveSigner (unauthorized transaction attempts)", () => {
     ).toThrow(WalletLockedError);
   });
 });
+
+describe("resolveSigner: browser wallet", () => {
+  it("signs only for the account the wallet shared", () => {
+    expect(
+      resolveSigner({
+        ...base,
+        source: "injected",
+        sender: DEMO_0,
+        injectedAddress: DEMO_0,
+      }),
+    ).toEqual({ kind: "injected", address: DEMO_0 });
+    expect(() =>
+      resolveSigner({
+        ...base,
+        source: "injected",
+        sender: OTHER,
+        injectedAddress: DEMO_0,
+      }),
+    ).toThrow(/different account/);
+  });
+
+  it("refuses before the wallet is connected", () => {
+    expect(() =>
+      resolveSigner({ ...base, source: "injected", sender: DEMO_0 }),
+    ).toThrow(/Connect your browser wallet/);
+  });
+});

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { suggestedTransfers, summarize, transfersInvolving } from "./balances";
+import {
+  pairwiseDebtCount,
+  suggestedTransfers,
+  summarize,
+  transfersInvolving,
+} from "./balances";
 
 describe("summarize", () => {
   it("adds each group's position separately", () => {
@@ -71,5 +76,56 @@ describe("suggested transfers", () => {
       youPay: [],
       youReceive: transfers,
     });
+  });
+});
+
+describe("pairwiseDebtCount", () => {
+  const share = (member: string, amount: bigint) => ({ member, amount });
+
+  it("counts one payment per pair of people with a net debt", () => {
+    // a paid for b and c; b paid for c: c owes a and b, b owes a -> 3 pairs.
+    expect(
+      pairwiseDebtCount(
+        [
+          {
+            payer: "a",
+            shares: [share("a", 10n), share("b", 10n), share("c", 10n)],
+          },
+          { payer: "b", shares: [share("b", 5n), share("c", 5n)] },
+        ],
+        [],
+      ),
+    ).toBe(3);
+  });
+
+  it("nets debts in both directions between the same two people", () => {
+    expect(
+      pairwiseDebtCount(
+        [
+          { payer: "a", shares: [share("b", 10n)] },
+          { payer: "b", shares: [share("a", 10n)] },
+        ],
+        [],
+      ),
+    ).toBe(0);
+  });
+
+  it("removes a pair once it is paid off", () => {
+    expect(
+      pairwiseDebtCount(
+        [{ payer: "a", shares: [share("b", 10n), share("c", 10n)] }],
+        [{ debtor: "b", creditor: "a", amount: 10n }],
+      ),
+    ).toBe(1);
+  });
+
+  it("is never fewer than the simplified plan for a cycle", () => {
+    // a owes b, b owes c, c owes a, 10 each: everyone nets to zero.
+    const expenses = [
+      { payer: "b", shares: [share("a", 10n)] },
+      { payer: "c", shares: [share("b", 10n)] },
+      { payer: "a", shares: [share("c", 10n)] },
+    ];
+    expect(pairwiseDebtCount(expenses, [])).toBe(3);
   });
 });

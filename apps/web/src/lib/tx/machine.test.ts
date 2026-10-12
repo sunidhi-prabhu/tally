@@ -86,3 +86,29 @@ describe("transaction state machine", () => {
     expect(txReducer(preparing, { type: "reset" })).toEqual({ status: "idle" });
   });
 });
+
+describe("confirmation timing", () => {
+  it("measures from submission to the successful receipt", () => {
+    const events: TxEvent[] = [
+      { type: "prepare", label: "Pay" },
+      { type: "request-signature" },
+      { type: "submitted", hash: HASH, at: 1_000 },
+      { type: "receipt", success: true, blockNumber: 7n, at: 1_620 },
+    ];
+    const state = events.reduce(txReducer, { status: "idle" } as TxState);
+    expect(state).toMatchObject({ status: "confirmed", confirmationMs: 620 });
+  });
+
+  it("leaves the duration unknown rather than guessing", () => {
+    const events: TxEvent[] = [
+      { type: "prepare", label: "Pay" },
+      { type: "submitted", hash: HASH },
+      { type: "receipt", success: true, blockNumber: 7n, at: 1_620 },
+    ];
+    const state = events.reduce(txReducer, { status: "idle" } as TxState);
+    expect(state).toMatchObject({ status: "confirmed" });
+    expect(
+      state.status === "confirmed" ? state.confirmationMs : "n/a",
+    ).toBeUndefined();
+  });
+});

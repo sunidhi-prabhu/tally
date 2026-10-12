@@ -1,11 +1,12 @@
 import type { Address, LocalAccount } from "viem";
 import type { PasskeyWallet } from "./passkey/wallet";
 
-export type AccountSource = "demo" | "passkey" | "view";
+export type AccountSource = "demo" | "passkey" | "injected" | "view";
 
 export type ResolvedSigner =
   | { kind: "demo"; address: Address }
-  | { kind: "passkey"; account: LocalAccount };
+  | { kind: "passkey"; account: LocalAccount }
+  | { kind: "injected"; address: Address };
 
 /**
  * Decides who may sign as `sender`, before anything is signed. Throws with a user-facing reason
@@ -18,6 +19,8 @@ export function resolveSigner(input: {
   demoAccounts: readonly Address[];
   passkeyWallet: PasskeyWallet | undefined;
   passkeyUnavailableReason?: string;
+  /** The account the browser wallet has shared with this site (lowercase). */
+  injectedAddress?: Address;
 }): ResolvedSigner {
   const wanted = input.sender.toLowerCase() as Address;
   switch (input.source) {
@@ -32,6 +35,16 @@ export function resolveSigner(input: {
         );
       }
       return { kind: "demo", address: wanted };
+    case "injected":
+      if (!input.injectedAddress) {
+        throw new Error("Connect your browser wallet first. Nothing was sent.");
+      }
+      if (input.injectedAddress.toLowerCase() !== wanted) {
+        throw new Error(
+          "Your browser wallet is on a different account than this sender. Nothing was sent.",
+        );
+      }
+      return { kind: "injected", address: wanted };
     case "passkey":
       if (!input.passkeyWallet) {
         throw new Error(

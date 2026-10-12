@@ -5,12 +5,20 @@ export type TxState =
   | { status: "idle" }
   | { status: "preparing"; label: string }
   | { status: "awaiting-signature"; label: string }
-  | { status: "pending"; label: string; hash: `0x${string}` }
+  | {
+      status: "pending";
+      label: string;
+      hash: `0x${string}`;
+      /** Clock time (ms) when the signed transaction was handed to the node. */
+      submittedAt?: number;
+    }
   | {
       status: "confirmed";
       label: string;
       hash: `0x${string}`;
       blockNumber: bigint;
+      /** Measured from sending to seeing the successful receipt; includes network latency. */
+      confirmationMs?: number;
     }
   | { status: "reverted"; label: string; hash: `0x${string}`; message: string }
   | { status: "failed"; label: string; message: string };
@@ -18,8 +26,14 @@ export type TxState =
 export type TxEvent =
   | { type: "prepare"; label: string }
   | { type: "request-signature" }
-  | { type: "submitted"; hash: `0x${string}` }
-  | { type: "receipt"; success: boolean; blockNumber: bigint; message?: string }
+  | { type: "submitted"; hash: `0x${string}`; at?: number }
+  | {
+      type: "receipt";
+      success: boolean;
+      blockNumber: bigint;
+      message?: string;
+      at?: number;
+    }
   | { type: "error"; message: string }
   | { type: "reset" };
 
@@ -41,7 +55,12 @@ export function txReducer(state: TxState, event: TxEvent): TxState {
     case "submitted":
       return state.status === "awaiting-signature" ||
         state.status === "preparing"
-        ? { status: "pending", label: state.label, hash: event.hash }
+        ? {
+            status: "pending",
+            label: state.label,
+            hash: event.hash,
+            submittedAt: event.at,
+          }
         : state;
     case "receipt":
       if (state.status !== "pending") return state;
@@ -51,6 +70,10 @@ export function txReducer(state: TxState, event: TxEvent): TxState {
             label: state.label,
             hash: state.hash,
             blockNumber: event.blockNumber,
+            confirmationMs:
+              state.submittedAt !== undefined && event.at !== undefined
+                ? Math.max(0, event.at - state.submittedAt)
+                : undefined,
           }
         : {
             status: "reverted",

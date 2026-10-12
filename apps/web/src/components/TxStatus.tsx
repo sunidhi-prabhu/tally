@@ -4,6 +4,12 @@ import type { TxState } from "@/lib/tx/machine";
 import { shortHash } from "@/lib/format";
 import { Notice } from "./ui";
 
+/** "0.62 s" under 10 s, otherwise whole seconds. */
+export function formatSeconds(ms: number): string {
+  const s = ms / 1000;
+  return s < 10 ? `${s.toFixed(2)} s` : `${Math.round(s)} s`;
+}
+
 /** Announces each stage of a transaction. Never says "done" before a successful receipt. */
 export function TxStatus({
   state,
@@ -38,7 +44,10 @@ export function TxStatus({
         return {
           tone: "positive" as const,
           title: `${state.label}: confirmed`,
-          text: `Included in block ${state.blockNumber.toString()}.`,
+          text:
+            state.confirmationMs !== undefined
+              ? `Included in block ${state.blockNumber.toString()} · confirmed ${formatSeconds(state.confirmationMs)} after sending.`
+              : `Included in block ${state.blockNumber.toString()}.`,
         };
       case "reverted":
         return {

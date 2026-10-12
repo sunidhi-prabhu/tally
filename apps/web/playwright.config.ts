@@ -35,6 +35,17 @@ export default defineConfig({
       },
     },
     {
+      // Largest phone width in the spec (390–430 px). Transaction flows run once, at 390.
+      name: "mobile-430",
+      testIgnore: /flows\.spec/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 430, height: 932 },
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
       name: "mobile-390",
       use: {
         ...devices["Desktop Chrome"],

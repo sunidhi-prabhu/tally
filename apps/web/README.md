@@ -139,7 +139,7 @@ device or real Face ID / Touch ID prompt has been tested.**
 ```bash
 pnpm --filter @tally/web test       # Vitest: config, formatting, split form, tx state machine,
                                     # balances, indexer parsers, WebSocket client, components
-pnpm --filter @tally/web test:e2e   # Playwright at 1440×900, 834×1112 and 390×844,
+pnpm --filter @tally/web test:e2e   # Playwright at 1440×900, 834×1112, 430×932 and 390×844,
                                     # incl. passkeys via a virtual PRF authenticator
 ```
 

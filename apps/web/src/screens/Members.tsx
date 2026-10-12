@@ -9,6 +9,7 @@ import { useTransaction } from "@/hooks/useTransaction";
 import { GROUP_DETAIL, parseGroupDetail } from "@/lib/indexer/queries";
 import { tallyLedgerAbi } from "@/lib/contracts/tallyLedgerAbi";
 import { DataState } from "@/components/DataState";
+import { QrCode } from "@/components/QrCode";
 import { TxStatus } from "@/components/TxStatus";
 import { useDemoNames } from "@/components/AppShell";
 import {
@@ -34,6 +35,9 @@ export function Members({ groupId }: { groupId: string }) {
     { kind: "add" | "remove" | "leave"; member: string } | undefined
   >();
   const [copied, setCopied] = useState(false);
+  // Native share sheet on phones; hidden where the browser has none.
+  const canShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
   // Rendered only after indexed data loads in the browser, so window is available.
   const link =
     typeof window === "undefined"
@@ -123,6 +127,23 @@ export function Members({ groupId }: { groupId: string }) {
                     {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
+                <QrCode
+                  value={link}
+                  label={`QR code for the ${g.name} group link`}
+                />
+                {canShare && (
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() =>
+                      void navigator
+                        .share({ title: `Join ${g.name} on Tally`, url: link })
+                        .catch(() => undefined)
+                    }
+                  >
+                    Share link
+                  </Button>
+                )}
                 {isAdmin && canWrite ? (
                   <form
                     className="space-y-2"

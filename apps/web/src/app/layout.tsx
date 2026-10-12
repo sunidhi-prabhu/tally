@@ -7,6 +7,9 @@ import { AppShell } from "@/components/AppShell";
 export const metadata: Metadata = {
   title: APP_NAME,
   description: "Split shared expenses and settle up in stablecoins on Monad.",
+  // iOS "Add to Home Screen": full-screen, with Tally's icon and name.
+  appleWebApp: { capable: true, title: APP_NAME, statusBarStyle: "default" },
+  icons: { apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {

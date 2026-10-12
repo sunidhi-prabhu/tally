@@ -5,14 +5,20 @@ import { useMemo, useState } from "react";
 import { useAccount } from "@/providers/AppProviders";
 import { useLiveQuery } from "@/hooks/useLiveQuery";
 import {
+  GROUP_DEBT_GRAPH,
   GROUP_DETAIL,
   GROUP_EXPENSES,
   GROUP_SETTLEMENTS,
+  parseDebtGraph,
   parseExpenses,
   parseGroupDetail,
   parseSettlements,
 } from "@/lib/indexer/queries";
-import { suggestedTransfers, transfersInvolving } from "@/lib/balances";
+import {
+  pairwiseDebtCount,
+  suggestedTransfers,
+  transfersInvolving,
+} from "@/lib/balances";
 import { DataState } from "@/components/DataState";
 import { WriteGate } from "@/components/WriteGate";
 import { BalanceBreakdown } from "@/components/BalanceBreakdown";
@@ -80,8 +86,9 @@ export function GroupDetail({ groupId }: { groupId: string }) {
 
             {me && !isActiveMember && (
               <Notice tone="accent" title="You're not a member of this group">
-                Only the group admin can add members. Share your address with
-                them: <span className="font-mono break-all">{me}</span>
+                Only the group admin can add members. Send them your address:{" "}
+                <span className="font-mono break-all">{me}</span>
+                <ShareAddress address={me} groupName={g.name} />
               </Notice>
             )}
 
@@ -181,12 +188,15 @@ export function GroupDetail({ groupId }: { groupId: string }) {
               aria-labelledby={`tab-${tab}`}
             >
               {tab === "balances" && (
-                <BalanceBreakdown
-                  members={g.members}
-                  transfers={transfers}
-                  me={me}
-                  names={names}
-                />
+                <>
+                  <BalanceBreakdown
+                    members={g.members}
+                    transfers={transfers}
+                    me={me}
+                    names={names}
+                  />
+                  <Simplification groupId={g.id} payments={transfers.length} />
+                </>
               )}
               {tab === "expenses" && (
                 <Expenses
@@ -331,5 +341,79 @@ function Settlements({
         )
       }
     </DataState>
+  );
+}
+
+/** One tap to copy or share your address with the group admin. */
+function ShareAddress({
+  address,
+  groupName,
+}: {
+  address: string;
+  groupName: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const canShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
+  return (
+    <span className="mt-2 flex gap-2">
+      <Button
+        variant="secondary"
+        className="min-h-10 flex-1"
+        onClick={() =>
+          void navigator.clipboard?.writeText(address).then(
+            () => setCopied(true),
+            () => setCopied(false),
+          )
+        }
+      >
+        {copied ? "Copied" : "Copy my address"}
+      </Button>
+      {canShare && (
+        <Button
+          variant="secondary"
+          className="min-h-10 flex-1"
+          onClick={() =>
+            void navigator
+              .share({
+                title: `Add me to ${groupName} on Tally`,
+                text: `Please add me to "${groupName}" on Tally: ${address}`,
+              })
+              .catch(() => undefined)
+          }
+        >
+          Share
+        </Button>
+      )}
+    </span>
+  );
+}
+
+/** "Simplified to 2 payments instead of 4": shown only when simplification saves payments. */
+function Simplification({
+  groupId,
+  payments,
+}: {
+  groupId: string;
+  payments: number;
+}) {
+  const graph = useLiveQuery(
+    GROUP_DEBT_GRAPH,
+    useMemo(() => ({ id: groupId }), [groupId]),
+    parseDebtGraph,
+  );
+  if (!graph.data) return null;
+  const separate = pairwiseDebtCount(
+    graph.data.expenses,
+    graph.data.settlements,
+  );
+  if (separate <= payments) return null;
+  return (
+    <p className="mt-2 rounded-2xl bg-accent-bg p-3 text-sm" role="note">
+      <strong>
+        Simplified to {payments} {payments === 1 ? "payment" : "payments"}
+      </strong>{" "}
+      instead of {separate}, if everyone paid each person back separately.
+    </p>
   );
 }

@@ -156,8 +156,8 @@ function ExpenseForm({
   if (signable.length === 0) {
     return (
       <Notice tone="warning">
-        {source === "passkey"
-          ? `Your passkey wallet isn't a member of this group. Ask the admin to add ${address ?? "your address"}.`
+        {source === "passkey" || source === "injected"
+          ? `Your ${source === "passkey" ? "passkey" : "browser"} wallet isn't a member of this group. Ask the admin to add ${address ?? "your address"}.`
           : "None of this group's members is a local demo account you can sign as."}
       </Notice>
     );

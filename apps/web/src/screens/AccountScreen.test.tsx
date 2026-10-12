@@ -43,6 +43,12 @@ const ctx = {
       unavailableReason: undefined as string | undefined,
       rpId: "localhost",
     },
+    injected: {
+      available: false,
+      address: undefined as string | undefined,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    },
   },
   support: { status: "supported", prf: "yes" } as {
     status: string;
@@ -96,6 +102,12 @@ beforeEach(() => {
     rpId: "localhost",
   };
   ctx.support = { status: "supported", prf: "yes" };
+  ctx.account.injected = {
+    available: false,
+    address: undefined,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  };
 });
 afterEach(cleanup);
 
@@ -260,6 +272,50 @@ describe("passkey onboarding states", () => {
     expect(
       screen.queryByRole("heading", { name: "Local demo accounts" }),
     ).toBeNull();
+  });
+});
+
+describe("browser wallet", () => {
+  it("explains how to use one when none is installed", async () => {
+    render(<AccountScreen />);
+    expect(await screen.findByText(/Already use MetaMask, Rabby/)).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Connect browser wallet" }),
+    ).toBeNull();
+  });
+
+  it("connects through the wallet's own prompt", async () => {
+    ctx.account.injected.available = true;
+    ctx.account.injected.connect = vi.fn().mockResolvedValue(undefined);
+    render(<AccountScreen />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect browser wallet" }),
+    );
+    expect(ctx.account.injected.connect).toHaveBeenCalled();
+  });
+
+  it("shows a rejected connection instead of switching identity", async () => {
+    ctx.account.injected.available = true;
+    ctx.account.injected.connect = vi
+      .fn()
+      .mockRejectedValue(new Error("User rejected the request."));
+    render(<AccountScreen />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect browser wallet" }),
+    );
+    expect(await screen.findByText("Not connected")).toBeTruthy();
+    expect(ctx.account.setSource).not.toHaveBeenCalledWith("injected");
+  });
+
+  it("once connected, can be used or disconnected", async () => {
+    ctx.account.injected.available = true;
+    ctx.account.injected.address = ADDRESS;
+    render(<AccountScreen />);
+    expect(await screen.findByTestId("injected-address")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Use this wallet" }));
+    expect(ctx.account.setSource).toHaveBeenCalledWith("injected");
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    expect(ctx.account.injected.disconnect).toHaveBeenCalled();
   });
 });
 

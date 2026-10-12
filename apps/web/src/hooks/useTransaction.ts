@@ -32,7 +32,7 @@ export interface TransactionRunner {
 
 export function useTransaction(): TransactionRunner {
   const { config, chain, publicClient } = useApp();
-  const { getWalletClient } = useAccount();
+  const { getWalletClient, prepareSigner } = useAccount();
   const [state, dispatch] = useReducer(txReducer, {
     status: "idle",
   } as TxState);
@@ -58,13 +58,14 @@ export function useTransaction(): TransactionRunner {
           typeof publicClient.simulateContract
         >[0];
         await publicClient.simulateContract({ ...params, account: sender });
+        await prepareSigner(sender);
         dispatch({ type: "request-signature" });
         hash = await wallet.writeContract({
           ...(call as unknown as Parameters<typeof wallet.writeContract>[0]),
           account,
           chain,
         });
-        dispatch({ type: "submitted", hash });
+        dispatch({ type: "submitted", hash, at: performance.now() });
       } catch (error) {
         dispatch({ type: "error", message: describeError(error) });
         return undefined;
@@ -78,6 +79,7 @@ export function useTransaction(): TransactionRunner {
           type: "receipt",
           success: receipt.status === "success",
           blockNumber: receipt.blockNumber,
+          at: performance.now(),
         });
         return receipt.status === "success" ? receipt : undefined;
       } catch (error) {
@@ -85,7 +87,7 @@ export function useTransaction(): TransactionRunner {
         return undefined;
       }
     },
-    [config, chain, publicClient, getWalletClient],
+    [config, chain, publicClient, getWalletClient, prepareSigner],
   );
 
   return {
