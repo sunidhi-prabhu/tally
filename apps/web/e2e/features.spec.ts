@@ -1,16 +1,21 @@
 import { expect, test } from "@playwright/test";
 import { actAs } from "./helpers";
 
-test("the invite card shows a scannable QR code for the group link", async ({
+test("the invite card only shows a QR code for a real invite link", async ({
   page,
 }) => {
   await page.goto("/");
-  await actAs(page, 0);
+  await actAs(page, 0); // Trip's admin
   await page.goto("/groups/1/members");
-  const qr = page.getByRole("img", { name: /QR code for the .* group link/ });
-  await expect(qr).toBeVisible();
-  const src = await qr.getAttribute("src");
-  expect(src).toMatch(/^data:image\/png;base64,/);
+  // No invite known on this device: the admin is offered one, and nothing scannable
+  // (a plain group link would mislead people into thinking they can join with it).
+  await expect(
+    page.getByRole("button", { name: /^(Create invite link|Reset link)$/ }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Group link")).toHaveCount(0);
+  if (!(await page.getByLabel("Invite link").isVisible())) {
+    await expect(page.getByRole("img", { name: /QR code/ })).toHaveCount(0);
+  }
 });
 
 test("Tally is installable as an app (Chrome's own installability check)", async ({

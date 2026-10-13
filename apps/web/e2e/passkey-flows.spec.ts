@@ -53,6 +53,18 @@ test("a passkey wallet creates a group, adds an expense, pays and acknowledges",
   ).toBeVisible();
   const groupUrl = page.url();
 
+  // A locked admin on Members is offered the unlock, not told "only the admin can add members".
+  await page.goto(`${groupUrl}/members`);
+  await expect(page.getByText(/Only the admin/)).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Unlock your wallet to create an invite link or add members by address.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Unlock with passkey" }),
+  ).toBeVisible();
+
   // Reloading locks the wallet (as phones often do). The group page must say so and offer the
   // unlock, not silently hide "Add expense".
   await page.goto(groupUrl);

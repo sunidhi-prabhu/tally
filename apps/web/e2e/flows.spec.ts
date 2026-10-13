@@ -20,6 +20,10 @@ test("add an equal-split expense", async ({ page }) => {
   await dialog.getByRole("button", { name: "Add expense" }).click();
 
   await expect(page.getByText("Add expense: confirmed")).toBeVisible();
+  // Measured, not claimed: "confirmed 0.42 s after sending".
+  await expect(
+    page.getByText(/confirmed \d+(\.\d+)? s after sending/),
+  ).toBeVisible();
   await expect(page.getByText(/Tx 0x[0-9a-f]{8}/)).toBeVisible();
   await expect(page.getByText("Balances are updated.")).toBeVisible();
 });

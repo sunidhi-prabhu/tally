@@ -11,6 +11,7 @@ import { tallyLedgerAbi } from "@/lib/contracts/tallyLedgerAbi";
 import { DataState } from "@/components/DataState";
 import { InviteLink } from "@/components/InviteLink";
 import { TxStatus } from "@/components/TxStatus";
+import { WriteGate } from "@/components/WriteGate";
 import { useDemoNames } from "@/components/AppShell";
 import {
   AddressLabel,
@@ -126,6 +127,9 @@ export function Members({ groupId }: { groupId: string }) {
                       Add member
                     </Button>
                   </form>
+                ) : isAdmin ? (
+                  // The admin's wallet is locked (or view-only): say so, with the fix.
+                  <WriteGate />
                 ) : (
                   <Notice tone="accent">
                     Only the admin (

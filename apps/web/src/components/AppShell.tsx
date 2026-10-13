@@ -109,11 +109,9 @@ function AccountPicker() {
         : status === "working"
           ? "Waiting for passkey…"
           : "Passkey wallet · locked"
-      : source === "injected" && address
-        ? "Browser wallet"
-        : source === "view" && address
-          ? "Viewing"
-          : undefined;
+      : source === "view" && address
+        ? "Viewing"
+        : undefined;
   return (
     <Link
       href="/account"

@@ -51,7 +51,7 @@ export function useIsSponsored(): boolean {
 
 export function useTransaction(): TransactionRunner {
   const { config, chain, publicClient } = useApp();
-  const { getWalletClient, prepareSigner } = useAccount();
+  const { getWalletClient } = useAccount();
   const sponsored = useIsSponsored();
   const [state, dispatch] = useReducer(txReducer, {
     status: "idle",
@@ -97,7 +97,6 @@ export function useTransaction(): TransactionRunner {
             typeof publicClient.simulateContract
           >[0];
           await publicClient.simulateContract({ ...params, account: sender });
-          await prepareSigner(sender);
           dispatch({ type: "request-signature" });
           hash = await wallet.writeContract({
             ...(call as unknown as Parameters<typeof wallet.writeContract>[0]),
@@ -127,7 +126,7 @@ export function useTransaction(): TransactionRunner {
         return undefined;
       }
     },
-    [config, chain, publicClient, getWalletClient, prepareSigner, sponsored],
+    [config, chain, publicClient, getWalletClient, sponsored],
   );
 
   return {

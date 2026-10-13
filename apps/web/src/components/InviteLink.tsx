@@ -77,9 +77,7 @@ export function InviteLink({
     signer !== zeroAddress &&
     inviteSignerOf(storedKey) === signer;
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const link = active
-    ? inviteLink(origin, groupId, storedKey)
-    : `${origin}/groups/${groupId}`;
+  const link = active ? inviteLink(origin, groupId, storedKey) : "";
   const canShare =
     typeof navigator !== "undefined" && typeof navigator.share === "function";
   const busy = ["preparing", "awaiting-signature", "pending"].includes(
@@ -113,45 +111,51 @@ export function InviteLink({
       <p className="text-sm text-muted">
         {active
           ? "Anyone with this link can join with Face ID or their passkey, no address needed. Share it only with people you trust; reset it to stop old links working."
-          : isAdmin
-            ? "Create an invite link so friends can join themselves. Or add them by address below."
-            : "Only the admin can create invite links. This is the group's page; send the admin your address to be added."}
+          : isAdmin && !canWrite
+            ? "Unlock your wallet to create an invite link or add members by address."
+            : isAdmin
+              ? "Create an invite link so friends can join with one scan. Or add them by address below."
+              : "Only the admin can create invite links. Ask them for one, or send them your address."}
       </p>
-      <div className="flex gap-2">
-        <input
-          readOnly
-          aria-label={active ? "Invite link" : "Group link"}
-          value={link}
-          className="min-h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm"
-        />
-        <Button
-          variant="secondary"
-          onClick={() =>
-            void navigator.clipboard?.writeText(link).then(
-              () => setCopied(true),
-              () => setCopied(false),
-            )
-          }
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <QrCode
-        value={link}
-        label={`QR code for the ${groupName} ${active ? "invite" : "group"} link`}
-      />
-      {canShare && (
-        <Button
-          variant="secondary"
-          className="w-full"
-          onClick={() =>
-            void navigator
-              .share({ title: `Join ${groupName} on Tally`, url: link })
-              .catch(() => undefined)
-          }
-        >
-          Share link
-        </Button>
+      {active && (
+        <>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              aria-label="Invite link"
+              value={link}
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm"
+            />
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void navigator.clipboard?.writeText(link).then(
+                  () => setCopied(true),
+                  () => setCopied(false),
+                )
+              }
+            >
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+          <QrCode
+            value={link}
+            label={`QR code for the ${groupName} invite link`}
+          />
+          {canShare && (
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() =>
+                void navigator
+                  .share({ title: `Join ${groupName} on Tally`, url: link })
+                  .catch(() => undefined)
+              }
+            >
+              Share link
+            </Button>
+          )}
+        </>
       )}
       {isAdmin && canWrite && signer !== undefined && (
         <div className="grid grid-cols-2 gap-2">

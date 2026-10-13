@@ -112,8 +112,7 @@ checks the delegation was signed by the wallet itself, simulates before spending
 stops below 0.05 MON, sends one transaction at a time, and rate-limits per wallet and client
 (per server instance: a first line of defence, not a guarantee). `SPONSOR_PRIVATE_KEY` is a
 server-only variable, read at request time and never sent to the browser; public anvil keys
-are refused on any non-local chain. Browser wallets (MetaMask etc.) and demo accounts keep
-paying their own gas.
+are refused on any non-local chain. Local demo accounts keep paying their own gas.
 
 ## Invite links
 

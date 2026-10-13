@@ -11,7 +11,6 @@ import {
 import { DEFAULT_IDLE_MS } from "@/lib/passkey/wallet";
 import { fundLocalTestMon } from "@/lib/chain";
 import { formatNative, shortAddress } from "@/lib/format";
-import { describeError } from "@/lib/errors";
 import { useDemoNames } from "@/components/AppShell";
 import {
   Avatar,
@@ -31,7 +30,6 @@ export function AccountScreen() {
       </Link>
       <h1 className="text-2xl font-semibold tracking-tight">Your account</h1>
       <PasskeyCard />
-      <BrowserWallet />
       <Limitations />
       {config.allowDemoAccounts && <DemoAccounts />}
       <ViewOnly />
@@ -396,99 +394,6 @@ function Limitations() {
           Creating a new passkey creates a new, empty wallet.
         </li>
       </ul>
-    </Card>
-  );
-}
-
-/** "Pay with any wallet": MetaMask, Rabby, Coinbase Wallet… via window.ethereum. */
-function BrowserWallet() {
-  const { source, setSource, injected } = useAccount();
-  const { chain } = useApp();
-  const [error, setError] = useState<string | undefined>();
-  const [working, setWorking] = useState(false);
-  const [native] = useNativeBalance(injected.address);
-  const inUse = source === "injected" && injected.address !== undefined;
-  return (
-    <Card aria-labelledby="browser-wallet-heading" className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 id="browser-wallet-heading" className="font-semibold">
-          Browser wallet
-        </h2>
-        {inUse && <Badge tone="accent">In use</Badge>}
-      </div>
-      {!injected.available ? (
-        <p className="text-sm text-muted">
-          Already use MetaMask, Rabby or another crypto wallet? Open Tally in
-          that wallet&apos;s browser, or on a computer with its extension, to
-          use it instead of a passkey.
-        </p>
-      ) : injected.address ? (
-        <>
-          <div className="flex items-center gap-3 rounded-xl bg-background p-3">
-            <Avatar address={injected.address} size={36} />
-            <div className="min-w-0 flex-1">
-              <p
-                className="font-mono text-sm break-all"
-                data-testid="injected-address"
-              >
-                {injected.address}
-              </p>
-              <p className="text-xs text-muted">
-                {native === undefined
-                  ? "Balance …"
-                  : `${formatNative(native, chain.nativeCurrency.symbol)} for network fees`}
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {!inUse && (
-              <Button onClick={() => setSource("injected")}>
-                Use this wallet
-              </Button>
-            )}
-            <Button
-              variant="secondary"
-              className={inUse ? "col-span-2" : ""}
-              onClick={() => {
-                injected.disconnect();
-                if (inUse) setSource("view");
-              }}
-            >
-              Disconnect
-            </Button>
-          </div>
-          <p className="text-xs text-muted">
-            Your wallet asks you to confirm every transaction and switches to{" "}
-            {chain.name} when needed.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="text-sm text-muted">
-            Use the wallet you already have instead of a passkey. It confirms
-            every transaction itself.
-          </p>
-          <Button
-            className="w-full"
-            disabled={working}
-            onClick={() => {
-              setWorking(true);
-              setError(undefined);
-              injected
-                .connect()
-                .catch((e: unknown) => setError(describeError(e)))
-                .finally(() => setWorking(false));
-            }}
-          >
-            {working ? "Waiting for your wallet…" : "Connect browser wallet"}
-          </Button>
-          {error && (
-            <Notice tone="negative" role="alert" title="Not connected">
-              {error}
-            </Notice>
-          )}
-        </>
-      )}
     </Card>
   );
 }
